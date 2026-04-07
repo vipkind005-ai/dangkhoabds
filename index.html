@@ -1,0 +1,1304 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Scribe Pro v2.3 - Bất Động Sản</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        body { font-family: 'Nunito', sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
+</head>
+<body class="bg-[#f8fafc] text-[#334155]">
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js';
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js';
+        import { getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc } from 'https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js';
+
+        window.FirebaseAPI = { initializeApp, getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, getFirestore, collection, onSnapshot, doc, setDoc, deleteDoc };
+        window.dispatchEvent(new Event('firebase-loaded'));
+    </script>
+
+    <script type="text/babel">
+        const initApp = () => {
+            const { useState, useEffect } = React;
+
+            // CẤU HÌNH
+            const netlifyConfig = {
+                apiKey: "AIzaSyBshOeJNq-WlO4_6_E8xpVv1BaulWKrXWM",
+                authDomain: "webbds-c2385.firebaseapp.com",
+                projectId: "webbds-c2385",
+                storageBucket: "webbds-c2385.firebasestorage.app",
+                messagingSenderId: "132134718289",
+                appId: "1:132134718289:web:5b90b04d1977374ea3a170",
+                measurementId: "G-HBJPMZB0S9"
+            };
+
+            const IMGBB_API_KEY = "3178083057187e9d2e633e51b48983a2";
+            const DEFAULT_FB_PAGE_ID = "1034240303107728";
+            const DEFAULT_FB_TOKEN = "EAAaV4qva4ScBRAaAODv2jZAltYBl3GlTeudp9aBRaTapQqgORVb134ZBOICFv904ZAEabmt7qWPleYh1HgiY5mbTldBvZCBoZAP5VMrG9Bez7QdZBB9qlMHmyGn9bpEIL4YWZCgfkSqy9Mu0d0RVNLX0fEupJxmXyaOeLzc62ls2awGa6ZAqfufl7UIEoebj3dn3MnzY";
+            const VIDEO_API_KEY = "a9d52a4e9ceb4c59ad9dd988e5c1e6463403ca6fc801708b1101e129bd2348075acddbec7095a131ad7da912d8af88f6";
+
+            const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : netlifyConfig;
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'app-bat-dong-san';
+
+            const safeGetStorage = (key, defaultVal) => {
+                try { return localStorage.getItem(key) || defaultVal; }
+                catch (e) { return defaultVal; }
+            };
+
+            function App() {
+                const [currentView, setCurrentView] = useState('list');
+                const [posts, setPosts] = useState([]);
+
+                const [formData, setFormData] = useState({
+                    id: null, title: '', rawText: '', rawImage: '', internalInfo: '',
+                    content1: '', content2: '', content3: '', content: '', imageUrls: [],
+                    surveyImages: [], surveyNotes: ''
+                });
+
+                const [isGenerating, setIsGenerating] = useState(false);
+                const [toastMessage, setToastMessage] = useState('');
+
+                const [db, setDb] = useState(null);
+                const [user, setUser] = useState(null);
+                const [isCloudSyncing, setIsCloudSyncing] = useState(false);
+
+                const [showFbConfig, setShowFbConfig] = useState(false);
+                const [fbPageId, setFbPageId] = useState(() => safeGetStorage('fbPageId', DEFAULT_FB_PAGE_ID));
+                const [fbToken, setFbToken] = useState(() => safeGetStorage('fbToken', DEFAULT_FB_TOKEN));
+                const [postingFbId, setPostingFbId] = useState(null);
+                const [generatingVideoId, setGeneratingVideoId] = useState(null);
+
+                const [editorTab, setEditorTab] = useState(1);
+                const [activePostTabs, setActivePostTabs] = useState({});
+
+                const [postOptionsModal, setPostOptionsModal] = useState({ show: false, post: null, selectedContent: '' });
+                const [videoLinkModal, setVideoLinkModal] = useState({ show: false, url: '' });
+                const [confirmModal, setConfirmModal] = useState({ show: false, message: '', onConfirm: null });
+                const [downloadModal, setDownloadModal] = useState({ show: false, post: null });
+                const [smartCopyModal, setSmartCopyModal] = useState({ show: false, text: '', post: null });
+
+                const [surveyModal, setSurveyModal] = useState({ show: false, post: null });
+
+                const [postingGroups, setPostingGroups] = useState([]);
+                const [groupModal, setGroupModal] = useState({ show: false, mode: 'add', data: { name: '', url: '' } });
+
+                const [imageEditorModal, setImageEditorModal] = useState({
+                    show: false, index: null, originalUrl: '', currentUrl: '', watermarkText: '0935.210.212 - Đăng Khoa'
+                });
+
+                useEffect(() => {
+                    const api = window.FirebaseAPI || {};
+                    if (api.initializeApp) {
+                        try {
+                            const fbApp = api.initializeApp(firebaseConfig);
+                            const fbAuth = api.getAuth(fbApp);
+                            const fbDb = api.getFirestore(fbApp);
+                            setDb(fbDb);
+
+                            const initAuth = async () => {
+                                try {
+                                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                        await api.signInWithCustomToken(fbAuth, __initial_auth_token);
+                                    } else {
+                                        await api.signInAnonymously(fbAuth);
+                                    }
+                                } catch (e) { console.error("Lỗi đăng nhập:", e); }
+                            };
+                            initAuth();
+
+                            const unsubscribe = api.onAuthStateChanged(fbAuth, setUser);
+                            return () => unsubscribe();
+                        } catch (e) { console.error("Firebase Init Error:", e); }
+                    }
+                }, []);
+
+                useEffect(() => {
+                    const api = window.FirebaseAPI || {};
+                    if (!user || !db || !api.collection) return;
+                    setIsCloudSyncing(true);
+
+                    const postsRef = api.collection(db, 'artifacts', appId, 'public', 'data', 'posts');
+                    const unsubscribePosts = api.onSnapshot(postsRef, (snapshot) => {
+                        const loadedPosts = []; snapshot.forEach(doc => { loadedPosts.push({ id: doc.id, ...doc.data() }); });
+                        loadedPosts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                        setPosts(loadedPosts); setIsCloudSyncing(false);
+                    }, () => { setIsCloudSyncing(false); });
+
+                    const groupsRef = api.collection(db, 'artifacts', appId, 'public', 'data', 'groups');
+                    const unsubscribeGroups = api.onSnapshot(groupsRef, (snapshot) => {
+                        const loadedGroups = []; snapshot.forEach(doc => { loadedGroups.push({ id: doc.id, ...doc.data() }); });
+                        loadedGroups.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                        setPostingGroups(loadedGroups);
+                    }, () => {});
+
+                    return () => { unsubscribePosts(); unsubscribeGroups(); };
+                }, [user, db]);
+
+                const showToast = (message) => {
+                    setToastMessage(message);
+                    setTimeout(() => setToastMessage(''), 5500);
+                };
+
+                const saveFbConfig = () => {
+                    const cleanedToken = fbToken.trim();
+                    if (cleanedToken.includes("EAAAAAAAA")) { showToast('❌ LỖI MÃ: Mã Token này bị hỏng.'); return; }
+                    try { localStorage.setItem('fbPageId', fbPageId.trim()); localStorage.setItem('fbToken', cleanedToken); } catch(e) {}
+                    setShowFbConfig(false); showToast('✅ Đã cập nhật cài đặt Facebook!');
+                };
+
+                // ===============================================================================
+                // TÍNH NĂNG KHẢO SÁT & CHỈ ĐƯỜNG
+                // ===============================================================================
+                const extractAddress = (internalInfo) => {
+                    if (!internalInfo || typeof internalInfo !== 'string') return "";
+                    const addressMatch = internalInfo.match(/(?:ĐC|Địa chỉ):\s*(.*?)(?=\n|$)/i);
+                    const districtMatch = internalInfo.match(/(?:Phường \/ Quận|Quận|Khu vực):\s*(.*?)(?=\n|$)/i);
+
+                    const address = addressMatch ? addressMatch[1].trim() : "";
+                    const district = districtMatch ? districtMatch[1].trim() : "";
+                    return [address, district, "Hồ Chí Minh, Việt Nam"].filter(Boolean).join(", ");
+                };
+
+                const openDirections = (destination) => {
+                    if (!destination) { showToast("⚠️ Không tìm thấy địa chỉ trong Thông tin nội bộ!"); return; }
+                    const encodedDest = encodeURIComponent(destination);
+                    showToast("🗺️ Đang mở Google Maps chỉ đường...");
+
+                    if (navigator.geolocation) {
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                const { latitude, longitude } = position.coords;
+                                window.open(`https://www.google.com/maps/dir/?api=1&origin=${latitude},${longitude}&destination=${encodedDest}`, '_blank');
+                            },
+                            (error) => { window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedDest}`, '_blank'); }
+                        );
+                    } else {
+                        window.open(`https://www.google.com/maps/dir/?api=1&destination=${encodedDest}`, '_blank');
+                    }
+                };
+
+                const handleSurveyImageUpload = async (e) => {
+                    const files = Array.from(e.target.files);
+                    if (!files.length) return;
+                    showToast('⏳ Đang nén ảnh khảo sát...');
+                    const newImagesBase64 = await Promise.all(files.map(compressImage));
+
+                    setSurveyModal(prev => ({
+                        ...prev,
+                        post: { ...prev.post, surveyImages: [...(prev.post.surveyImages || []), ...newImagesBase64] }
+                    }));
+                };
+
+                const removeSurveyImage = (indexToRemove) => {
+                    setSurveyModal(prev => ({
+                        ...prev,
+                        post: { ...prev.post, surveyImages: prev.post.surveyImages.filter((_, index) => index !== indexToRemove) }
+                    }));
+                };
+
+                const handleSaveSurvey = async () => {
+                    const post = surveyModal.post;
+                    if (!post) return;
+                    showToast('⏳ Đang lưu dữ liệu khảo sát...');
+
+                    let finalSurveyImages = [];
+                    for (let i = 0; i < (post.surveyImages || []).length; i++) {
+                        const imgData = post.surveyImages[i];
+                        if (imgData.startsWith('data:image')) {
+                            if (IMGBB_API_KEY) {
+                                try {
+                                    const form = new FormData(); form.append('image', imgData.split(',')[1]);
+                                    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: form });
+                                    const data = await res.json();
+                                    if (data.success) { finalSurveyImages.push(data.data.url); } else finalSurveyImages.push(imgData);
+                                } catch(e) { finalSurveyImages.push(imgData); }
+                            } else { finalSurveyImages.push(imgData); }
+                        } else { finalSurveyImages.push(imgData); }
+                    }
+
+                    const updatedPost = { ...post, surveyImages: finalSurveyImages };
+                    const api = window.FirebaseAPI || {};
+
+                    if (user && db && api.setDoc) {
+                        try {
+                            await api.setDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'posts', post.id.toString()), updatedPost);
+                            showToast('✅ Đã lưu kết quả khảo sát!');
+                        } catch (e) { showToast('❌ Lỗi lưu dữ liệu!'); }
+                    } else {
+                        setPosts(prev => prev.map(p => p.id === post.id ? updatedPost : p));
+                        showToast('✅ Đã lưu khảo sát (cục bộ)!');
+                    }
+                    setSurveyModal({ show: false, post: null });
+                };
+
+                const openImageEditor = (index) => {
+                    const url = formData.imageUrls[index];
+                    if (!url.startsWith('data:image')) {
+                        showToast('🔄 Đang tải ảnh gốc từ hệ thống để chỉnh sửa...');
+                        fetch(url)
+                            .then(res => res.blob())
+                            .then(blob => {
+                                const reader = new FileReader();
+                                reader.onloadend = () => { setImageEditorModal({ show: true, index: index, originalUrl: reader.result, currentUrl: reader.result, watermarkText: '0935.210.212' }); }
+                                reader.readAsDataURL(blob);
+                            }).catch(() => { showToast('❌ Trình duyệt chặn tải ảnh chéo domain. Hãy thao tác với ảnh vừa up từ máy tính!'); });
+                        return;
+                    }
+                    setImageEditorModal({ show: true, index: index, originalUrl: url, currentUrl: url, watermarkText: '0935.210.212 - Đăng Khoa' });
+                };
+
+                const handleApplyImageProcess = (type) => {
+                    showToast('⏳ Đang áp dụng hiệu ứng...');
+                    const img = new Image(); img.crossOrigin = "anonymous";
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas'); canvas.width = img.width; canvas.height = img.height;
+                        const ctx = canvas.getContext('2d');
+                        if (type === 'enhance') { ctx.filter = 'brightness(1.1) contrast(1.15) saturate(1.2)'; }
+                        ctx.drawImage(img, 0, 0, canvas.width, canvas.height); ctx.filter = 'none';
+                        if (type === 'watermark') {
+                            const text = imageEditorModal.watermarkText;
+                            if (text) {
+                                const fontSize = Math.max(24, Math.floor(canvas.width * 0.04));
+                                ctx.font = `bold ${fontSize}px sans-serif`; ctx.textAlign = 'right'; ctx.textBaseline = 'bottom';
+                                const padding = Math.floor(canvas.width * 0.03); const x = canvas.width - padding; const y = canvas.height - padding;
+                                ctx.lineWidth = Math.max(3, Math.floor(fontSize * 0.15)); ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+                                ctx.strokeText(text, x, y); ctx.fillStyle = 'rgba(255, 255, 255, 1)'; ctx.fillText(text, x, y);
+                            }
+                        }
+                        setImageEditorModal(prev => ({ ...prev, currentUrl: canvas.toDataURL('image/jpeg', 0.9) }));
+                        showToast(type === 'watermark' ? '✨ Đã đóng dấu thành công!' : '✨ Đã làm đẹp màu sắc! Bấm lưu để áp dụng.');
+                    };
+                    img.src = imageEditorModal.currentUrl;
+                };
+
+                const saveEditedImage = () => {
+                    const newUrls = [...formData.imageUrls]; newUrls[imageEditorModal.index] = imageEditorModal.currentUrl;
+                    setFormData(prev => ({ ...prev, imageUrls: newUrls })); setImageEditorModal(prev => ({ ...prev, show: false }));
+                    showToast('✅ Đã lưu kết quả chỉnh sửa!');
+                };
+
+                // ===============================================================================
+                // BỘ LỌC AN TOÀN ĐĂNG TIN (CHỐNG SẬP MÀN HÌNH)
+                // ===============================================================================
+                const handleSaveGroup = async (e) => {
+                    e.preventDefault(); if (!groupModal.data.name) { showToast('⚠️ Vui lòng nhập tên Group/Trang!'); return; }
+                    const groupId = groupModal.data.id || Date.now().toString();
+                    const groupData = { ...groupModal.data, id: groupId, isPosted: groupModal.mode === 'add' ? false : groupModal.data.isPosted, timestamp: groupModal.mode === 'add' ? Date.now() : groupModal.data.timestamp };
+                    const api = window.FirebaseAPI || {};
+                    if (user && db && api.setDoc) {
+                        try { await api.setDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'groups', groupId), groupData); showToast(groupModal.mode === 'add' ? '✅ Đã thêm trang mới!' : '✅ Đã cập nhật trang!'); }
+                        catch (err) { showToast('❌ Lỗi khi lưu trang!'); }
+                    } else {
+                        setPostingGroups(prev => { if (groupModal.mode === 'add') return [groupData, ...prev]; return prev.map(g => g.id === groupId ? groupData : g); });
+                        showToast(groupModal.mode === 'add' ? '✅ Đã thêm (Local)!' : '✅ Đã cập nhật (Local)!');
+                    }
+                    setGroupModal({ show: false, mode: 'add', data: { name: '', url: '' } });
+                };
+
+                const toggleGroupStatus = async (group, forceStatus = null) => {
+                    const newStatus = forceStatus !== null ? forceStatus : !group.isPosted; if (forceStatus !== null && group.isPosted === newStatus) return;
+                    const api = window.FirebaseAPI || {};
+                    if (user && db && api.setDoc) {
+                        try { await api.setDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'groups', group.id.toString()), { ...group, isPosted: newStatus }); }
+                        catch (err) { showToast('❌ Lỗi cập nhật trạng thái!'); }
+                    } else { setPostingGroups(prev => prev.map(g => g.id === group.id ? { ...g, isPosted: newStatus } : g)); }
+                };
+
+                const resetAllGroups = () => {
+                    if (postingGroups.length === 0) return;
+                    setConfirmModal({
+                        show: true, message: 'Bạn muốn hủy đánh dấu toàn bộ danh sách để bắt đầu rải link vòng mới?',
+                        onConfirm: async () => {
+                            setConfirmModal({ show: false, message: '', onConfirm: null }); showToast('🔄 Đang reset trạng thái...');
+                            const api = window.FirebaseAPI || {};
+                            if (user && db && api.setDoc) {
+                                try {
+                                    for (const group of postingGroups) { if (group && group.isPosted) { await api.setDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'groups', group.id.toString()), { ...group, isPosted: false }); } }
+                                    showToast('✅ Đã làm mới vòng đăng!');
+                                } catch (err) { showToast('❌ Lỗi khi reset!'); }
+                            } else { setPostingGroups(prev => prev.map(g => ({ ...g, isPosted: false }))); showToast('✅ Đã làm mới vòng đăng!'); }
+                        }
+                    });
+                };
+
+                const handleDeleteGroup = (id) => {
+                    setConfirmModal({
+                        show: true, message: 'Bạn có chắc chắn muốn xóa trang này khỏi danh sách?',
+                        onConfirm: async () => {
+                            setConfirmModal({ show: false, message: '', onConfirm: null });
+                            const api = window.FirebaseAPI || {};
+                            if (user && db && api.deleteDoc) {
+                                try { await api.deleteDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'groups', id.toString())); showToast('✅ Đã xóa trang!'); }
+                                catch (err) { showToast('❌ Lỗi khi xóa!'); }
+                            } else { setPostingGroups(prev => prev.filter(g => g.id !== id)); showToast('✅ Đã xóa trang!'); }
+                        }
+                    });
+                };
+
+                const deleteAllGroups = () => {
+                    if (postingGroups.length === 0) return;
+                    setConfirmModal({
+                        show: true, message: '⚠️ NGUY HIỂM: Bạn có CHẮC CHẮN muốn XÓA TOÀN BỘ danh sách nhóm không? Hành động này không thể hoàn tác!',
+                        onConfirm: async () => {
+                            setConfirmModal({ show: false, message: '', onConfirm: null });
+                            showToast('🗑️ Đang xóa toàn bộ danh sách...');
+                            const api = window.FirebaseAPI || {};
+                            if (user && db && api.deleteDoc) {
+                                try {
+                                    for (const group of postingGroups) { if(group && group.id) await api.deleteDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'groups', group.id.toString())); }
+                                    showToast('✅ Đã dọn sạch danh sách!');
+                                } catch (err) { showToast('❌ Lỗi khi xóa toàn bộ!'); }
+                            } else { setPostingGroups([]); showToast('✅ Đã dọn sạch danh sách!'); }
+                        }
+                    });
+                };
+
+                const importDefaultGroups = async () => {
+                    showToast('🔄 Đang nạp danh sách 17 nhóm BĐS...');
+                    const DEFAULT_BDS_GROUPS = [
+                        { name: "[Bình Tân - Tân Phú] Hội Mua Bán Nhà Đất Bình Tân", url: "https://www.facebook.com/groups/450115322062727" },
+                        { name: "[Bình Tân - Tân Phú] Chợ Bất Động Sản Tân Phú", url: "https://www.facebook.com/groups/1796656807392727" },
+                        { name: "[Bình Tân - Tân Phú] Nhà Đất Bình Tân - Tân Phú Chính Chủ", url: "https://www.facebook.com/groups/340993816407516" },
+                        { name: "[Bình Tân - Tân Phú] Bất Động Sản Giá Rẻ Hồ Chí Minh", url: "https://www.facebook.com/groups/bdsgiarehochiminh" },
+                        { name: "[Bình Tân - Tân Phú] Dịch Vụ Bất Động Sản (Net)", url: "https://www.facebook.com/groups/dichvubatdongsan.net" },
+                        { name: "[Bình Tân - Tân Phú] Cộng Đồng Môi Giới Bình Tân", url: "https://www.facebook.com/groups/124253754800577" },
+                        { name: "[Quận 10 - Tân Bình] Hội Mua Bán Nhà Đất Quận 10", url: "https://www.facebook.com/groups/216647162252005" },
+                        { name: "[Quận 10 - Tân Bình] Thiên Khôi HCM Group 1", url: "https://www.facebook.com/groups/thienkhoihcmgroup1" },
+                        { name: "[Quận 10 - Tân Bình] Chợ Bất Động Sản Tân Bình", url: "https://www.facebook.com/groups/234253297138322" },
+                        { name: "[Quận 10 - Tân Bình] Nhà Đất Tân Bình Chính Chủ", url: "https://www.facebook.com/groups/1565588220371157" },
+                        { name: "[Quận 10 - Tân Bình] Mua Bán Nhà Đất Q10 & Tân Bình", url: "https://www.facebook.com/groups/330568263763959" },
+                        { name: "[Quận 10 - Tân Bình] Cộng Đồng Đầu Tư BĐS Quận 10", url: "https://www.facebook.com/groups/826137037780450" },
+                        { name: "[Quận 10 - Tân Bình] Bất Động Sản Tân Bình Giá Rẻ", url: "https://www.facebook.com/groups/400007573696804" },
+                        { name: "[Quận 10 - Tân Bình] Môi Giới BĐS Q10 - Tân Bình", url: "https://www.facebook.com/groups/152641418420282/" },
+                        { name: "[Quận 6 - Quận 11] Hội Mua Bán Nhà Đất Quận 6", url: "https://www.facebook.com/groups/1462889957111575" },
+                        { name: "[Quận 6 - Quận 11] Chợ Bất Động Sản Quận 11", url: "https://www.facebook.com/groups/599338600275496" },
+                        { name: "[Quận 6 - Quận 11] Nhà Đất Quận 6 & Quận 11 Chính Chủ", url: "https://www.facebook.com/groups/642351509308557" }
+                    ];
+
+                    const now = Date.now(); const api = window.FirebaseAPI || {};
+                    if (user && db && api.setDoc) {
+                        try {
+                            let count = 0;
+                            for (const g of DEFAULT_BDS_GROUPS) {
+                                const groupId = (now + count).toString();
+                                await api.setDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'groups', groupId), { id: groupId, name: g.name, url: g.url, isPosted: false, timestamp: now + count });
+                                count++;
+                            }
+                            showToast('✅ Đã nạp thành công 17 nhóm BĐS!');
+                        } catch (error) { showToast('❌ Lỗi khi tải danh sách!'); }
+                    } else {
+                        const newGroups = DEFAULT_BDS_GROUPS.map((g, index) => ({ id: (now + index).toString(), name: g.name, url: g.url, isPosted: false, timestamp: now + index }));
+                        setPostingGroups(prev => [...prev, ...newGroups]); showToast('✅ Đã nạp thành công 17 nhóm BĐS!');
+                    }
+                };
+
+                const handleGenerateVideo = async (post, customContent = null) => {
+                    let imagesToUse = post.imageUrls || []; if (imagesToUse.length === 0 && post.imageUrl) { imagesToUse = [post.imageUrl]; }
+                    if (imagesToUse.length < 2) { showToast("⚠️ Cần ít nhất 2 bức ảnh để ghép thành video chuyển cảnh!"); return; }
+                    if (!VIDEO_API_KEY) { setGeneratingVideoId(post.id); setTimeout(() => { setGeneratingVideoId(null); showToast("ℹ️ Vui lòng thêm API Key của Creatomate."); }, 2500); return; }
+
+                    const contentToUse = customContent || post.content1 || post.content || '';
+                    try {
+                        setGeneratingVideoId(post.id); showToast('🎬 Đang gửi lệnh dựng Video sang Creatomate...');
+                        const response = await fetch('https://api.creatomate.com/v1/renders', {
+                            method: 'POST', headers: { 'Authorization': `Bearer ${VIDEO_API_KEY}`, 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                template_id: '4f3441c7-a169-4981-b6b4-971b3253ef75',
+                                modifications: {
+                                    'Image_1': imagesToUse[0] || '', 'Image_2': imagesToUse[1] || '', 'Image_3': imagesToUse[2] || '',
+                                    'Title_Text': post.title, 'Description_Text': contentToUse.substring(0, 600) + (contentToUse.length > 600 ? '...' : '')
+                                }
+                            }),
+                        });
+
+                        const initData = await response.json(); const renderId = Array.isArray(initData) ? initData[0].id : initData.id;
+                        if (!renderId) throw new Error("Không thể khởi tạo tiến trình Video");
+                        showToast('⏳ Creatomate đang bắt đầu ghép ảnh (Sẽ mất khoảng 1-2 phút)...');
+
+                        let isFinished = false; let finalResult = null;
+                        while (!isFinished) {
+                            await new Promise(r => setTimeout(r, 4000));
+                            const checkRes = await fetch(`https://api.creatomate.com/v1/renders/${renderId}`, { headers: { 'Authorization': `Bearer ${VIDEO_API_KEY}` } });
+                            const checkData = await checkRes.json();
+                            if (checkData.status === 'succeeded') { isFinished = true; finalResult = checkData; }
+                            else if (checkData.status === 'failed' || checkData.status === 'error') { isFinished = true; throw new Error(checkData.error_message || "Lỗi render hệ thống bên Creatomate"); }
+                        }
+
+                        if(finalResult && finalResult.url) {
+                            showToast('✅ XUẤT SẮC! Video đã dựng xong hoàn toàn!'); setVideoLinkModal({ show: true, url: finalResult.url });
+                            const updatedPost = { ...post, videoUrl: finalResult.url }; const api = window.FirebaseAPI || {};
+                            if (user && db && api.setDoc) { api.setDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'posts', post.id.toString()), updatedPost).catch(console.error); }
+                            else { setPosts(prev => prev.map(p => p.id === post.id ? updatedPost : p)); }
+                        }
+                    } catch (error) { showToast(`❌ Lỗi Video: ${error.message}`); }
+                    finally { setGeneratingVideoId(null); }
+                };
+
+                const copyTextOnly = (text, successMsg = 'Đã copy!') => {
+                    if (!text) { showToast('Chưa có nội dung để copy!'); return; }
+                    const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select();
+                    try { document.execCommand('copy'); showToast(`✅ ${successMsg}`); }
+                    catch (err) { showToast('❌ Không thể copy.'); }
+                    document.body.removeChild(textArea);
+                };
+
+                const handleSmartCopy = (text, postObj) => {
+                    if (!text) { showToast('Chưa có nội dung để copy!'); return; }
+                    const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select();
+                    try { document.execCommand('copy'); setSmartCopyModal({ show: true, text: text, post: postObj }); }
+                    catch (err) { showToast('❌ Không thể copy nội dung.'); }
+                    document.body.removeChild(textArea);
+                };
+
+                const executeDownload = async (type) => {
+                    const post = downloadModal.post || smartCopyModal.post;
+                    if (!post) return;
+                    const safeTitle = (post.title || 'bai_viet').replace(/[^a-zA-Z0-9]/g, '_');
+
+                    setDownloadModal({ show: false, post: null });
+                    setSmartCopyModal({ show: false, text: '', post: null });
+                    showToast('⬇️ Đang gom dữ liệu, vui lòng đợi...');
+
+                    try {
+                        if (type === 'video' && post.videoUrl) {
+                            const res = await fetch(post.videoUrl); const blob = await res.blob();
+                            const file = new File([blob], `Video_BDS_${safeTitle}.mp4`, { type: blob.type || 'video/mp4' });
+                            if (navigator.canShare && navigator.canShare({ files: [file] })) {
+                                await navigator.share({ files: [file], title: 'Lưu Video' }); showToast('✅ Chọn "Lưu Video"!');
+                            } else {
+                                const blobUrl = window.URL.createObjectURL(blob); const a = document.createElement('a'); a.href = blobUrl; a.download = file.name;
+                                document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+                            }
+                        } else if (type === 'image') {
+                            const images = post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : (post.rawImage ? [post.rawImage] : []));
+                            if (images.length === 0) { showToast('Không có ảnh để tải!'); return; }
+                            const fileArray = [];
+                            for (let i = 0; i < images.length; i++) {
+                                const res = await fetch(images[i]); const blob = await res.blob();
+                                const file = new File([blob], `Hinh_BDS_${safeTitle}_${i + 1}.jpg`, { type: blob.type || 'image/jpeg' }); fileArray.push(file);
+                            }
+                            if (navigator.canShare && navigator.canShare({ files: fileArray })) {
+                                await navigator.share({ files: fileArray, title: 'Lưu Hình Ảnh' }); showToast('✅ Chọn "Lưu hình ảnh"!');
+                            } else {
+                                for (let i = 0; i < fileArray.length; i++) {
+                                    const blobUrl = window.URL.createObjectURL(fileArray[i]); const a = document.createElement('a'); a.href = blobUrl; a.download = fileArray[i].name;
+                                    document.body.appendChild(a); a.click(); document.body.removeChild(a); setTimeout(() => window.URL.revokeObjectURL(blobUrl), 1000);
+                                }
+                            }
+                        }
+                    } catch (error) { if (error.name !== 'AbortError') showToast('❌ Lỗi khi lưu file.'); }
+                };
+
+                const handlePostToFacebook = async (post, postType = 'image', customContent = null) => {
+                    const currentId = fbPageId || DEFAULT_FB_PAGE_ID; const currentToken = fbToken || DEFAULT_FB_TOKEN;
+                    const contentToPost = customContent || post.content1 || post.content || '';
+
+                    if (!currentToken || !currentId) { showToast("⚠️ Cấu hình trống, vui lòng kiểm tra lại!"); return; }
+                    setPostingFbId(post.id); showToast(`🔄 Đang gửi bài ${postType === 'video' ? 'kèm Video' : 'kèm Ảnh'} lên Fanpage...`);
+
+                    try {
+                        if (postType === 'video' && post.videoUrl) {
+                            const res = await fetch(`https://graph.facebook.com/v19.0/${currentId.trim()}/videos`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ description: contentToPost, file_url: post.videoUrl, access_token: currentToken.trim() }) });
+                            const data = await res.json(); if (data.error) throw new Error(data.error.message);
+                        } else {
+                            let imagesToPost = post.imageUrls || []; if (imagesToPost.length === 0 && post.imageUrl) { imagesToPost = [post.imageUrl]; }
+                            if (imagesToPost.length === 0) {
+                                const res = await fetch(`https://graph.facebook.com/v19.0/${currentId.trim()}/feed`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ message: contentToPost, access_token: currentToken.trim() }) });
+                                const data = await res.json(); if (data.error) throw new Error(data.error.message);
+                            } else if (imagesToPost.length === 1) {
+                                const res = await fetch(`https://graph.facebook.com/v19.0/${currentId.trim()}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ message: contentToPost, url: imagesToPost[0], access_token: currentToken.trim() }) });
+                                const data = await res.json(); if (data.error) throw new Error(data.error.message);
+                            } else {
+                                showToast(`🔄 Đang tải lên ẩn ${imagesToPost.length} bức ảnh...`); const mediaIds = [];
+                                for (let i = 0; i < imagesToPost.length; i++) {
+                                    const imgRes = await fetch(`https://graph.facebook.com/v19.0/${currentId.trim()}/photos`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ url: imagesToPost[i], published: 'false', access_token: currentToken.trim() }) });
+                                    const imgData = await imgRes.json(); if (imgData.error) throw new Error(imgData.error.message); mediaIds.push(imgData.id);
+                                }
+                                showToast('🔄 Đang gộp thành bài viết hoàn chỉnh...');
+                                const feedParams = new URLSearchParams(); feedParams.append('message', contentToPost); feedParams.append('access_token', currentToken.trim());
+                                mediaIds.forEach((id, index) => { feedParams.append(`attached_media[${index}][media_fbid]`, id); });
+                                const feedRes = await fetch(`https://graph.facebook.com/v19.0/${currentId.trim()}/feed`, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: feedParams });
+                                const feedData = await feedRes.json(); if (feedData.error) throw new Error(feedData.error.message);
+                            }
+                        }
+                        showToast("✅ Đã đăng thành công lên Facebook Fanpage!");
+                    } catch (error) { showToast("❌ Lỗi đăng FB: " + error.message); } finally { setPostingFbId(null); }
+                };
+
+                const handleCreateNew = () => {
+                    setFormData({ id: Date.now().toString(), title: '', rawText: '', rawImage: '', internalInfo: '', content1: '', content2: '', content3: '', content: '', imageUrls: [], surveyImages: [], surveyNotes: '' });
+                    setEditorTab(1); setCurrentView('editor');
+                };
+
+                const fetchWithRetry = async (url, options, retries = 3) => {
+                    let delay = 1000;
+                    for (let i = 0; i < retries; i++) {
+                        try {
+                            const res = await fetch(url, options);
+                            if (!res.ok) { const errData = await res.json().catch(() => ({})); throw new Error(errData.error?.message || `HTTP ${res.status}`); }
+                            return await res.json();
+                        } catch (e) { if (i === retries - 1) throw e; await new Promise(r => setTimeout(r, delay)); delay *= 2; }
+                    }
+                };
+
+                const compressImage = (file) => {
+                    return new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            const img = new Image();
+                            img.onload = () => {
+                                const canvas = document.createElement('canvas'); const MAX_WIDTH = 1200;
+                                let width = img.width; let height = img.height;
+                                if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
+                                canvas.width = width; canvas.height = height;
+                                const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, width, height);
+                                resolve(canvas.toDataURL('image/jpeg', 0.9));
+                            };
+                            img.src = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    });
+                };
+
+                const handleRawImageUpload = async (e) => {
+                    const file = e.target.files[0];
+                    if (file) { const compressedBase64 = await compressImage(file); setFormData(prev => ({ ...prev, rawImage: compressedBase64 })); }
+                };
+
+                const handleGenerateAI = async () => {
+                    if (!formData.rawText && !formData.rawImage) { showToast('Vui lòng nhập dữ liệu thô hoặc tải ảnh lên!'); return; }
+                    setIsGenerating(true);
+                    const apiKey = "AIzaSyCDnyFXklZffHvtiHXzvLyr02Voi0O_0Cg";
+
+                    try {
+                        showToast('⚡ Đang dịch mã & trích xuất địa chỉ tốc độ cao...');
+                        let activeModel = "gemini-1.5-flash-latest";
+                        try {
+                            const checkRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey);
+                            if (checkRes.ok) {
+                                const modelData = await checkRes.json(); const available = modelData.models.map(m => m.name);
+                                if (available.includes("models/gemini-2.5-flash")) activeModel = "gemini-2.5-flash";
+                                else if (available.includes("models/gemini-2.0-flash")) activeModel = "gemini-2.0-flash";
+                                else if (available.includes("models/gemini-1.5-flash")) activeModel = "gemini-1.5-flash";
+                            }
+                        } catch (e) {}
+
+                        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + activeModel + ":generateContent?key=" + apiKey;
+
+                        const prompt = `Bạn là trợ lý đắc lực của chuyên gia môi giới bất động sản. Hãy đọc chuỗi dữ liệu viết tắt do môi giới cung cấp và thực hiện 2 nhiệm vụ sau NHANH NHẤT CÓ THỂ (Bỏ qua các bước tính toán, đánh giá rườm rà):
+
+NHIỆM VỤ 1: GIẢI MÃ THÔNG TIN NỘI BỘ
+Bóc tách chuỗi viết tắt thành thông tin rõ ràng. KHÔNG CẦN TÍNH ĐƠN GIÁ. KHÔNG CẦN ĐÁNH GIÁ MỨC GIÁ TỐT HAY XẤU. Chỉ cần dịch ra thông số đơn thuần. Nếu thông tin nào không có, ghi "Không rõ".
+
+NHIỆM VỤ 2: VIẾT BÀI ĐĂNG FACEBOOK VÀ TRÍCH XUẤT TIÊU ĐỀ
+Sử dụng các thông tin an toàn để viết 3 mẫu bài đăng Facebook.
+- BẢO MẬT ĐỊA CHỈ: TUYỆT ĐỐI KHÔNG ghi chi tiết số nhà/hẻm cụ thể vào 3 bài đăng Facebook. Chỉ ghi Phường, Quận hoặc Tên Đường.
+- TRÌNH BÀY RÕ RÀNG: Các thông số của căn nhà (Diện tích, Kết cấu, Tình trạng, Đường/Hẻm, Giá bán...) PHẢI được liệt kê tách bạch, mỗi thông số MỘT DÒNG (xuống dòng rõ ràng).
+- ICON CHUYÊN NGHIỆP: Sử dụng các biểu tượng (icon) bắt mắt ở đầu mỗi dòng thông số để tạo sự thu hút (VD: 📍 Vị trí, 📐 Diện tích, 🏗️ Kết cấu, 🚘 Hẻm, 💰 Giá bán, ⚖️ Pháp lý...).
+- ĐỊNH DẠNG SẠCH SẼ: TUYỆT ĐỐI KHÔNG SỬ DỤNG KÝ TỰ SAO (*, **) HAY MARKDOWN ĐỂ IN ĐẬM HOẶC LÀM DẤU ĐẦU DÒNG. Văn bản phải trơn tru, sạch sẽ, chỉ dùng Emoji hoặc dấu gạch ngang (-) để liệt kê.
+- CÚ PHÁP CHỐT HẠ: Bắt buộc chèn chính xác khối thông tin sau ở cuối MỖI BÀI VIẾT (Không dùng hashtag):
+"☎️ Liên hệ: 0935.210.212 - Đăng Khoa
+💎 Đăng Khoa BĐS - Chuyên nghiệp, Tận tâm, Trách nhiệm!"
+
+---
+TRẢ VỀ KẾT QUẢ THEO ĐÚNG CẤU TRÚC SAU ĐÂY (Phải có đủ các cụm từ in hoa):
+
+THÔNG TIN NỘI BỘ:
+ĐC: [Địa chỉ đầy đủ]
+Diện Tích: [Ví dụ: 29m2]
+Số tầng: [Ví dụ: 2 tầng]
+Ngang: [Ví dụ: 3.3m]
+Dài: [Ví dụ: 8.6m]
+Giá chốt/Giá bán: [Ví dụ: 4.4 Tỷ]
+Phường / Quận: [Ví dụ: Phường 7, Tân Bình]
+Phân Khúc: [Ví dụ: 3 - 5 Tỷ]
+HĐ: [Người giữ hợp đồng]
+SĐT: [Số điện thoại]
+Nguồn: [Tên Nguồn]
+
+TIÊU ĐỀ: [BẮT BUỘC: LẤY ĐỊA CHỈ ĐẦY ĐỦ BAO GỒM CẢ PHƯỜNG VÀ QUẬN TRONG DỮ LIỆU ĐỂ LÀM TIÊU ĐỀ. Ví dụ: "45.7 Bành Văn Trân, Phường 7, Tân Bình" hoặc "20.16 Nghĩa Hoà, Tân Bình"]
+
+NỘI DUNG 1:
+[Bài đăng phong cách BÁN HÀNG CHUYÊN NGHIỆP, tập trung thông số và tiện ích, giấu số nhà. Nhớ xuống dòng và thêm icon cho từng thông số]
+
+NỘI DUNG 2:
+[Bài đăng phong cách KỂ CHUYỆN THỰC TẾ, NGẮN GỌN. Đi thẳng vào lý do bán chân thật, kèm thông số rõ ràng có icon]
+
+NỘI DUNG 3:
+[Bài đăng phong cách NGẮN GỌN SÚC TÍCH, liệt kê rõ ràng bằng icon, tuyệt đối không dùng dấu sao, giấu số nhà]
+
+Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
+
+                        const parts = [{ text: prompt }];
+                        if (formData.rawImage) {
+                            const mimeType = formData.rawImage.match(/data:(.*?);base64/)[1]; const base64Data = formData.rawImage.split(',')[1];
+                            parts.push({ inlineData: { mimeType: mimeType, data: base64Data } });
+                        }
+
+                        const result = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: parts }] }) });
+                        let generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
+
+                        // BỘ LỌC LÀM SẠCH DIỆT TẬN GỐC TẤT CẢ KÝ TỰ SAO (*) TRONG VĂN BẢN
+                        generatedText = generatedText.replace(/\*/g, '');
+
+                        let aiTitle = '';
+                        let c1 = generatedText, c2 = '', c3 = '', internal = '';
+
+                        const internalMatch = generatedText.match(/THÔNG TIN NỘI BỘ:\s*([\s\S]*?)(?=TIÊU ĐỀ:)/i);
+                        if (internalMatch) internal = internalMatch[1].trim();
+
+                        const titleMatch = generatedText.match(/TIÊU ĐỀ:\s*([\s\S]*?)(?=NỘI DUNG 1:)/i);
+                        const c1Match = generatedText.match(/NỘI DUNG 1:\s*([\s\S]*?)(?=NỘI DUNG 2:)/i);
+                        const c2Match = generatedText.match(/NỘI DUNG 2:\s*([\s\S]*?)(?=NỘI DUNG 3:)/i);
+                        const c3Match = generatedText.match(/NỘI DUNG 3:\s*([\s\S]*)/i);
+
+                        if (c1Match && c2Match && c3Match) {
+                            if (titleMatch) aiTitle = titleMatch[1].trim();
+                            c1 = c1Match[1].trim(); c2 = c2Match[1].trim(); c3 = c3Match[1].trim();
+                        } else {
+                            const lines = generatedText.split('\n').filter(line => line.trim() !== '');
+                            if (lines.length > 1 && lines[0].length < 100) { aiTitle = lines[0].replace(/_|-|#|TIÊU ĐỀ:/gi, '').trim(); c1 = lines.slice(1).join('\n').replace(/NỘI DUNG 1:/gi, '').trim(); }
+                        }
+
+                        // ÉP ĐỊA CHỈ VỪA LẤY ĐƯỢC CHÈN THẲNG VÀO TÊN CHIẾN DỊCH (Ghi đè luôn dữ liệu cũ nếu có)
+                        setFormData(prev => ({
+                            ...prev,
+                            internalInfo: internal,
+                            content1: c1,
+                            content2: c2,
+                            content3: c3,
+                            content: c1,
+                            title: aiTitle || prev.title || `Bài viết nháp - ${new Date().toLocaleTimeString('vi-VN')}`
+                        }));
+
+                        setEditorTab(1); showToast('✨ Đã giải mã thông tin & sáng tạo bài viết siêu tốc!');
+                    } catch (error) { showToast(error.message === "Failed to fetch" ? "Lỗi mạng hoặc kết nối bị chặn." : `LỖI: ${error.message}`); }
+                    finally { setIsGenerating(false); }
+                };
+
+                const handleSavePost = async () => {
+                    if (!formData.title && !formData.content1 && !formData.content) { showToast('Không có nội dung để lưu!'); return; }
+                    const postId = formData.id || Date.now().toString();
+
+                    const api = window.FirebaseAPI || {};
+                    if (user && db && api.setDoc) {
+                        try {
+                            setIsCloudSyncing(true); showToast('⏳ Đang tải ảnh lên máy chủ...');
+                            let finalImageUrls = [];
+                            for (let i = 0; i < formData.imageUrls.length; i++) {
+                                const imgData = formData.imageUrls[i];
+                                if (imgData.startsWith('data:image')) {
+                                    if (!IMGBB_API_KEY) { showToast('⚠️ Lỗi: Chưa cấu hình ImgBB!'); setIsCloudSyncing(false); return; }
+                                    const form = new FormData(); form.append('image', imgData.split(',')[1]);
+                                    const res = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, { method: 'POST', body: form });
+                                    const data = await res.json();
+                                    if (data.success) { finalImageUrls.push(data.data.url); } else { throw new Error("Upload ảnh thất bại"); }
+                                } else { finalImageUrls.push(imgData); }
+                            }
+                            const newPost = { ...formData, id: postId, title: formData.title || 'Bài viết không tiêu đề', date: new Date().toLocaleDateString('vi-VN'), timestamp: Date.now(), imageUrls: finalImageUrls, rawImage: '' };
+                            await api.setDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'posts', postId), newPost);
+                            showToast('☁️ Đã đồng bộ bài viết!');
+                        } catch (e) { showToast('Lỗi đồng bộ Đám mây!'); }
+                        finally { setIsCloudSyncing(false); }
+                    } else {
+                        const newPost = { ...formData, id: postId, title: formData.title || 'Bài viết không tiêu đề', date: new Date().toLocaleDateString('vi-VN'), timestamp: Date.now() };
+                        setPosts(prev => {
+                            const exists = prev.find(p => p.id === newPost.id);
+                            if (exists) return prev.map(p => p.id === newPost.id ? newPost : p);
+                            return [newPost, ...prev].sort((a,b) => b.timestamp - a.timestamp);
+                        });
+                        showToast('⚠️ Đã lưu nháp cục bộ!');
+                    }
+                    setCurrentView('list');
+                };
+
+                const handleDelete = (id) => {
+                    setConfirmModal({
+                        show: true, message: 'Bạn có chắc chắn muốn xóa bài viết này?',
+                        onConfirm: async () => {
+                            setConfirmModal({ show: false, message: '', onConfirm: null });
+                            const api = window.FirebaseAPI || {};
+                            if (user && db && api.deleteDoc) {
+                                try { await api.deleteDoc(api.doc(db, 'artifacts', appId, 'public', 'data', 'posts', id.toString())); showToast('Đã xóa khỏi hệ thống'); }
+                                catch (e) { showToast('Lỗi khi xóa!'); }
+                            } else { setPosts(prev => prev.filter(p => p.id !== id)); showToast('Đã xóa bài viết'); }
+                        }
+                    });
+                };
+
+                const handleEdit = (post) => {
+                    const updatedPost = { ...post };
+                    if (updatedPost.imageUrl && !updatedPost.imageUrls) { updatedPost.imageUrls = [updatedPost.imageUrl]; }
+                    setFormData({
+                        ...updatedPost, imageUrls: updatedPost.imageUrls || [], internalInfo: updatedPost.internalInfo || '',
+                        content1: updatedPost.content1 || updatedPost.content || '', content2: updatedPost.content2 || '', content3: updatedPost.content3 || '',
+                        surveyImages: updatedPost.surveyImages || [], surveyNotes: updatedPost.surveyNotes || ''
+                    });
+                    setEditorTab(1); setCurrentView('editor');
+                };
+
+                const handleMultipleImageUpload = async (e) => {
+                    const files = Array.from(e.target.files); if (!files.length) return;
+                    const newImagesBase64 = await Promise.all(files.map(compressImage));
+                    setFormData(prev => ({ ...prev, imageUrls: [...(prev.imageUrls || []), ...newImagesBase64] }));
+                };
+
+                const removeUploadedImage = (indexToRemove) => {
+                    setFormData(prev => ({ ...prev, imageUrls: prev.imageUrls.filter((_, index) => index !== indexToRemove) }));
+                };
+
+                // LỌC DỮ LIỆU GROUP AN TOÀN TRƯỚC KHI HIỂN THỊ
+                const groupedData = (postingGroups || []).reduce((acc, g) => {
+                    try {
+                        if (!g) return acc;
+                        const safeName = (typeof g.name === 'string' && g.name.trim() !== '') ? g.name.trim() : 'Group chưa đặt tên';
+                        const match = safeName.match(/^\[(.*?)\]\s*(.*)/);
+                        const category = (match && match[1]) ? match[1].trim() : 'Khu Vực Khác';
+                        const displayName = (match && match[2]) ? match[2].trim() : safeName;
+
+                        if (!acc[category]) acc[category] = [];
+                        acc[category].push({ ...g, displayName: displayName || 'Group không tên' });
+                    } catch(e) {
+                        if (!acc['Lỗi Dữ Liệu']) acc['Lỗi Dữ Liệu'] = [];
+                        acc['Lỗi Dữ Liệu'].push({ ...g, displayName: 'Dữ liệu hỏng' });
+                    }
+                    return acc;
+                }, {});
+
+                return (
+                    <div className="relative min-h-screen">
+                        {toastMessage && (
+                            <div className="fixed top-6 right-6 z-[90] bg-gray-900/90 backdrop-blur text-white px-5 py-3.5 rounded-xl shadow-2xl flex items-center gap-3 animate-[fade-in_0.3s_ease-out]">
+                                {toastMessage.includes('⚠️') ? ( <i className="fa-solid fa-triangle-exclamation text-amber-400 text-xl"></i> ) : toastMessage.includes('❌') ? ( <i className="fa-solid fa-circle-xmark text-red-500 text-xl"></i> ) : toastMessage.includes('✨') ? ( <i className="fa-solid fa-wand-magic-sparkles text-indigo-400 text-xl"></i> ) : ( <i className="fa-solid fa-circle-check text-emerald-400 text-xl"></i> )}
+                                <span className="text-base font-semibold tracking-wide">{toastMessage}</span>
+                            </div>
+                        )}
+
+                        {surveyModal.show && surveyModal.post && (
+                            <div className="fixed inset-0 z-[70] bg-gray-900/80 backdrop-blur flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-[fade-in_0.2s_ease-out]">
+                                    <div className="flex justify-between items-center p-5 border-b border-gray-100 bg-emerald-50/50 rounded-t-2xl">
+                                        <div>
+                                            <h3 className="text-xl font-extrabold text-emerald-900 flex items-center gap-2">
+                                                <i className="fa-solid fa-map-location-dot text-emerald-600"></i> Khảo sát Thực tế
+                                            </h3>
+                                            <p className="text-sm text-emerald-700 mt-1 font-medium">{surveyModal.post.title}</p>
+                                        </div>
+                                        <button onClick={() => setSurveyModal({ show: false, post: null })} className="text-gray-400 hover:text-red-500 transition-colors w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-50"><i className="fa-solid fa-xmark text-xl"></i></button>
+                                    </div>
+
+                                    <div className="p-5 flex-1 overflow-y-auto flex flex-col gap-6">
+                                        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                                            <div>
+                                                <p className="text-xs font-bold text-blue-500 uppercase tracking-wider mb-1">Vị trí mục tiêu (Trích xuất từ AI)</p>
+                                                <p className="text-blue-900 font-bold text-base">
+                                                    <i className="fa-solid fa-location-dot mr-2 text-blue-600"></i>
+                                                    {extractAddress(surveyModal.post.internalInfo) || "Chưa có dữ liệu địa chỉ. Vui lòng cập nhật Thông tin nội bộ."}
+                                                </p>
+                                            </div>
+                                            <button
+                                                onClick={() => openDirections(extractAddress(surveyModal.post.internalInfo))}
+                                                disabled={!extractAddress(surveyModal.post.internalInfo)}
+                                                className="w-full sm:w-auto px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-blue-200"
+                                            >
+                                                <i className="fa-solid fa-route"></i> Dẫn đường tới đây
+                                            </button>
+                                        </div>
+
+                                        <div>
+                                            <div className="flex justify-between items-center mb-4">
+                                                <label className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                                                    <i className="fa-solid fa-camera-retro text-emerald-600"></i> Kho ảnh Thực tế (Riêng tư)
+                                                </label>
+                                                <div className="relative">
+                                                    <input type="file" multiple accept="image/*" id="surveyImageInput" className="hidden" onChange={handleSurveyImageUpload} />
+                                                    <label htmlFor="surveyImageInput" className="cursor-pointer bg-emerald-100 hover:bg-emerald-200 text-emerald-800 px-4 py-2 rounded-xl flex items-center gap-2 font-bold text-sm transition-colors shadow-sm">
+                                                        <i className="fa-solid fa-upload"></i> Tải ảnh lên
+                                                    </label>
+                                                </div>
+                                            </div>
+
+                                            <p className="text-sm text-gray-500 mb-4 italic">Nơi lưu trữ sổ đỏ, ảnh ngõ hẻm, hình nhà thực tế không qua chỉnh sửa. Khách hàng sẽ không bao giờ nhìn thấy mục này.</p>
+
+                                            {(!surveyModal.post.surveyImages || surveyModal.post.surveyImages.length === 0) ? (
+                                                <div className="border-2 border-dashed border-emerald-200 rounded-2xl p-10 flex flex-col items-center justify-center bg-emerald-50/30 hover:bg-emerald-50 transition-colors cursor-pointer relative">
+                                                    <input type="file" multiple accept="image/*" onChange={handleSurveyImageUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
+                                                    <i className="fa-solid fa-images text-4xl text-emerald-300 mb-3"></i>
+                                                    <p className="text-base font-bold text-emerald-600">Nhấn để chụp hoặc chọn ảnh khảo sát</p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+                                                    {surveyModal.post.surveyImages.map((url, index) => (
+                                                        <div key={index} className="relative rounded-xl overflow-hidden border border-gray-200 aspect-square group shadow-sm bg-gray-100">
+                                                            <img src={url} alt={`Survey ${index}`} className="w-full h-full object-cover" />
+                                                            <button onClick={() => removeSurveyImage(index)} className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white w-8 h-8 flex items-center justify-center rounded-lg shadow-lg transition-transform hover:scale-105">
+                                                                <i className="fa-solid fa-trash text-sm"></i>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <div className="p-5 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 rounded-b-2xl">
+                                        <button onClick={() => setSurveyModal({ show: false, post: null })} className="px-6 py-2.5 bg-white border border-gray-200 hover:bg-gray-100 text-gray-700 font-bold rounded-xl transition-colors">Đóng</button>
+                                        <button onClick={handleSaveSurvey} className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition-all shadow-md shadow-emerald-200 flex items-center gap-2">
+                                            <i className="fa-solid fa-floppy-disk"></i> Lưu Khảo sát
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {imageEditorModal.show && (
+                            <div className="fixed inset-0 z-[70] bg-gray-900/80 backdrop-blur flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl flex flex-col max-h-[90vh] animate-[fade-in_0.2s_ease-out]">
+                                    <div className="flex justify-between items-center p-5 border-b border-gray-100">
+                                        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+                                            <i className="fa-solid fa-wand-magic-sparkles text-indigo-600"></i> Xử lý & Đóng dấu Ảnh
+                                        </h3>
+                                        <button onClick={() => setImageEditorModal({ ...imageEditorModal, show: false })} className="text-gray-400 hover:text-red-500 transition-colors"><i className="fa-solid fa-xmark text-xl"></i></button>
+                                    </div>
+
+                                    <div className="p-5 flex-1 overflow-y-auto flex flex-col lg:flex-row gap-6 bg-gray-50/50">
+                                        <div className="flex-1 bg-gray-200 rounded-xl border border-gray-300 overflow-hidden flex items-center justify-center relative min-h-[300px]">
+                                            <img src={imageEditorModal.currentUrl} alt="Edit preview" className="max-w-full max-h-[60vh] object-contain shadow-sm" />
+                                        </div>
+
+                                        <div className="w-full lg:w-80 flex flex-col gap-5">
+                                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col gap-3">
+                                                <label className="block text-sm font-bold text-gray-700">1. Bộ lọc thông minh</label>
+                                                <button onClick={() => handleApplyImageProcess('enhance')} className="w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+                                                    <i className="fa-solid fa-sun text-emerald-500"></i> Làm Đẹp (Sáng & Nét ảnh)
+                                                </button>
+                                            </div>
+
+                                            <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+                                                <label className="block text-sm font-bold text-gray-700 mb-2">2. Đóng dấu SĐT (Watermark)</label>
+                                                <input type="text" value={imageEditorModal.watermarkText} onChange={e => setImageEditorModal({ ...imageEditorModal, watermarkText: e.target.value })} className="w-full p-2.5 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none text-sm mb-3 font-semibold text-gray-700" placeholder="Nhập SĐT..." />
+                                                <button onClick={() => handleApplyImageProcess('watermark')} className="w-full py-2.5 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 font-bold rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+                                                    <i className="fa-solid fa-stamp text-indigo-500"></i> Đóng dấu góc phải
+                                                </button>
+                                            </div>
+
+                                            <div className="mt-auto flex flex-col gap-3 pt-4 border-t border-gray-200">
+                                                <button onClick={() => setImageEditorModal({ ...imageEditorModal, currentUrl: imageEditorModal.originalUrl })} className="w-full py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold rounded-lg transition-colors flex items-center justify-center gap-2 text-sm">
+                                                    <i className="fa-solid fa-rotate-left"></i> Hoàn tác
+                                                </button>
+                                                <button onClick={saveEditedImage} className="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-all shadow-lg shadow-indigo-200">
+                                                    <i className="fa-solid fa-floppy-disk"></i> Lưu Ảnh Này
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {confirmModal.show && (
+                            <div className="fixed inset-0 z-[60] bg-gray-900/60 backdrop-blur flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-[fade-in_0.2s_ease-out]">
+                                    <div className="w-16 h-16 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                                        <i className="fa-solid fa-triangle-exclamation"></i>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">Xác nhận</h3>
+                                    <p className="text-gray-500 text-sm mb-6 leading-relaxed">{confirmModal.message}</p>
+                                    <div className="flex gap-3">
+                                        <button onClick={() => setConfirmModal({ show: false, message: '', onConfirm: null })} className="flex-1 py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors">Hủy bỏ</button>
+                                        <button onClick={confirmModal.onConfirm} className="flex-1 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl transition-colors shadow-md">Đồng ý</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {videoLinkModal.show && (
+                            <div className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 text-center">
+                                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 text-2xl">
+                                        <i className="fa-solid fa-circle-check"></i>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">Dựng Video Thành Công!</h3>
+                                    <p className="text-gray-500 text-sm mb-4">Creatomate đã xử lý xong. Bạn có thể Copy link dưới đây để tải về, hoặc bấm nút Play (màu hồng) ở bài viết để mở lại bất cứ lúc nào.</p>
+                                    <div className="flex items-center gap-2 bg-gray-50 p-2 rounded-xl mb-4 border border-gray-200">
+                                        <input type="text" readOnly value={videoLinkModal.url} className="w-full bg-transparent outline-none text-sm text-gray-600 px-2" />
+                                        <button onClick={() => copyTextOnly(videoLinkModal.url, 'Đã copy Link Video!')} className="bg-white px-3 py-2 rounded-lg text-indigo-600 font-bold shadow-sm hover:shadow border border-gray-100 transition-all">Copy</button>
+                                    </div>
+                                    <button onClick={() => setVideoLinkModal({ show: false, url: '' })} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-all">Đóng</button>
+                                </div>
+                            </div>
+                        )}
+
+                        {smartCopyModal.show && (
+                            <div className="fixed inset-0 z-[80] bg-gray-900/60 backdrop-blur flex items-center justify-center p-4 animate-[fade-in_0.2s_ease-out]">
+                                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 text-center border border-indigo-50">
+                                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">
+                                        <i className="fa-solid fa-copy"></i>
+                                    </div>
+                                    <h3 className="text-xl font-extrabold text-gray-900 mb-2">Đã Copy Nội Dung!</h3>
+                                    <p className="text-gray-500 text-sm mb-5 leading-relaxed px-2">Bài viết đã được lưu vào bộ nhớ tạm (Sẵn sàng <b>Ctrl + V</b>). <br/><br/>
+                                        <span className="text-amber-600 bg-amber-50 px-2 py-1.5 rounded-md text-xs font-semibold block mt-1 border border-amber-100">⚠️ Vui lòng tải file xuống máy để đính kèm vào bài đăng!</span>
+                                    </p>
+                                    <div className="flex flex-col gap-3">
+                                        {smartCopyModal.post?.videoUrl ? (
+                                            <button onClick={() => executeDownload('video')} className="w-full py-3 bg-pink-50 hover:bg-pink-100 text-pink-600 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-pink-200">
+                                                <i className="fa-solid fa-download"></i> Tải Video về máy
+                                            </button>
+                                        ) : (
+                                            <button onClick={() => executeDownload('image')} className="w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-indigo-200">
+                                                <i className="fa-solid fa-images"></i> Tải Album Ảnh về máy
+                                            </button>
+                                        )}
+                                        <button onClick={() => setSmartCopyModal({ show: false, text: '', post: null })} className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors">Đóng cửa sổ</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {downloadModal.show && (
+                            <div className="fixed inset-0 z-[80] bg-gray-900/60 backdrop-blur flex items-center justify-center p-4 animate-[fade-in_0.2s_ease-out]">
+                                <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 text-center border border-indigo-50">
+                                    <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl shadow-inner">
+                                        <i className="fa-solid fa-download"></i>
+                                    </div>
+                                    <h3 className="text-xl font-extrabold text-gray-900 mb-2">Tải Dữ Liệu</h3>
+                                    <p className="text-gray-500 text-sm mb-5 leading-relaxed px-2">Bạn muốn tải file gì xuống máy của mình?</p>
+                                    <div className="flex flex-col gap-3">
+                                        <button onClick={() => executeDownload('video')} disabled={!downloadModal.post?.videoUrl} className={`w-full py-3 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border ${downloadModal.post?.videoUrl ? 'bg-pink-50 hover:bg-pink-100 text-pink-600 border-pink-200' : 'bg-gray-50 text-gray-400 border-gray-200 cursor-not-allowed'}`}>
+                                            <i className="fa-solid fa-video"></i> Tải Video về máy
+                                        </button>
+                                        <button onClick={() => executeDownload('image')} className="w-full py-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl flex items-center justify-center gap-2 transition-colors border border-indigo-200">
+                                            <i className="fa-solid fa-images"></i> Tải Album Ảnh về máy
+                                        </button>
+                                        <button onClick={() => setDownloadModal({ show: false, post: null })} className="w-full py-3 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-xl transition-colors">Đóng cửa sổ</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {postOptionsModal.show && (
+                            <div className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 text-center animate-[fade-in_0.2s_ease-out]">
+                                    <h3 className="text-xl font-bold text-gray-900 mb-2">Tùy chọn đăng bài</h3>
+                                    <p className="text-gray-500 text-sm mb-6">Bài viết này đã có sẵn Video. Bạn muốn đăng lên Fanpage kèm theo định dạng nào?</p>
+                                    <div className="flex flex-col gap-3">
+                                        <button onClick={() => { const p = postOptionsModal.post; const c = postOptionsModal.selectedContent; setPostOptionsModal({ show: false, post: null, selectedContent: '' }); handlePostToFacebook(p, 'video', c); }} className="w-full py-3 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md">
+                                            <i className="fa-solid fa-video"></i> Đăng kèm Video
+                                        </button>
+                                        <button onClick={() => { const p = postOptionsModal.post; const c = postOptionsModal.selectedContent; setPostOptionsModal({ show: false, post: null, selectedContent: '' }); handlePostToFacebook(p, 'image', c); }} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl flex items-center justify-center gap-2 transition-colors shadow-md">
+                                            <i className="fa-solid fa-images"></i> Đăng kèm Ảnh tĩnh
+                                        </button>
+                                        <button onClick={() => setPostOptionsModal({ show: false, post: null, selectedContent: '' })} className="w-full py-2 text-gray-500 hover:text-gray-700 font-bold mt-2">Hủy bỏ</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {showFbConfig && (
+                            <div className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+                                    <div className="flex justify-between items-center mb-5">
+                                        <h3 className="text-xl font-bold text-gray-900"><i className="fa-brands fa-facebook text-blue-600 mr-2"></i> Cài đặt Fanpage</h3>
+                                        <button onClick={() => setShowFbConfig(false)} className="text-gray-400 hover:text-red-500"><i className="fa-solid fa-xmark text-xl"></i></button>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div><label className="block text-sm font-bold text-gray-700 mb-1">Fanpage ID</label><input type="text" value={fbPageId} onChange={e => setFbPageId(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none"/></div>
+                                        <div><label className="block text-sm font-bold text-gray-700 mb-1">Page Access Token</label><input type="password" value={fbToken} onChange={e => setFbToken(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none"/></div>
+                                        <button onClick={saveFbConfig} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl mt-4">Lưu Cài Đặt</button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {groupModal.show && (
+                            <div className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur flex items-center justify-center p-4">
+                                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 animate-[fade-in_0.2s_ease-out]">
+                                    <div className="flex justify-between items-center mb-5">
+                                        <h3 className="text-xl font-bold text-gray-900 flex items-center gap-2"><i className="fa-solid fa-layer-group text-indigo-600"></i> {groupModal.mode === 'add' ? 'Thêm Nơi đăng' : 'Sửa thông tin'}</h3>
+                                        <button onClick={() => setGroupModal({ ...groupModal, show: false })} className="text-gray-400 hover:text-red-500"><i className="fa-solid fa-xmark text-xl"></i></button>
+                                    </div>
+                                    <form onSubmit={handleSaveGroup} className="space-y-4">
+                                        <div><label className="block text-sm font-bold text-gray-700 mb-1">Tên Group <span className="text-red-500">*</span></label><input type="text" value={groupModal.data.name} onChange={e => setGroupModal({ ...groupModal, data: { ...groupModal.data, name: e.target.value } })} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" autoFocus/></div>
+                                        <div><label className="block text-sm font-bold text-gray-700 mb-1">Link (URL)</label><input type="url" value={groupModal.data.url} onChange={e => setGroupModal({ ...groupModal, data: { ...groupModal.data, url: e.target.value } })} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none" /></div>
+                                        <button type="submit" className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl mt-4 shadow-md shadow-indigo-200">{groupModal.mode === 'add' ? 'Lưu danh sách' : 'Cập nhật'}</button>
+                                    </form>
+                                </div>
+                            </div>
+                        )}
+
+                        <header className="bg-white border-b border-gray-100 shadow-sm sticky top-0 z-10">
+                            <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
+                                <div className="flex items-center gap-2 sm:gap-3 text-indigo-600">
+                                    <div className="bg-indigo-50 p-2 sm:p-2.5 rounded-xl"><i className="fa-solid fa-wand-magic-sparkles text-xl sm:text-2xl"></i></div>
+                                    <span className="text-xl sm:text-2xl font-extrabold tracking-tight">AI Scribe <span className="text-gray-400 font-medium text-base sm:text-lg">Pro</span></span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <button onClick={() => setShowFbConfig(true)} className="p-2 sm:p-2.5 text-gray-500 hover:bg-gray-100 rounded-full mr-2"><i className="fa-solid fa-gear text-lg"></i></button>
+                                    <nav className="flex gap-2 sm:gap-3">
+                                        <button onClick={() => setCurrentView('groups')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold ${currentView === 'groups' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}`}><i className="fa-solid fa-share-nodes"></i><span className="hidden sm:inline"> Đăng tin</span></button>
+                                        <button onClick={() => setCurrentView('list')} className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold ${currentView === 'list' ? 'bg-indigo-50 text-indigo-700' : 'text-gray-500 hover:bg-gray-50'}`}><i className="fa-solid fa-list"></i><span className="hidden sm:inline"> Kho bài</span></button>
+                                        <button onClick={handleCreateNew} className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl font-bold ${currentView === 'editor' ? 'bg-indigo-600 text-white' : 'text-gray-500 hover:bg-gray-50'}`}><i className="fa-solid fa-plus"></i><span className="hidden sm:inline"> Tạo mới</span></button>
+                                    </nav>
+                                </div>
+                            </div>
+                        </header>
+
+                        <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 py-6 sm:py-10">
+
+                            {currentView === 'groups' && (
+                                <div className="animate-[fade-in_0.3s_ease-out]">
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 sm:mb-8 gap-4">
+                                        <div><h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">Mạng lưới Đăng tin</h1><p className="text-gray-500 mt-1 font-medium">Theo dõi các Hội Nhóm đã rải link.</p></div>
+                                        <div className="flex flex-wrap justify-end gap-2 w-full sm:w-auto">
+                                            <button onClick={importDefaultGroups} className="bg-emerald-50 text-emerald-700 px-4 py-2.5 rounded-xl font-bold flex-1 sm:flex-none"><i className="fa-solid fa-cloud-arrow-down"></i> Nạp 17 Group</button>
+                                            <button onClick={resetAllGroups} className="bg-white border text-gray-700 px-4 py-2.5 rounded-xl font-bold flex-1 sm:flex-none"><i className="fa-solid fa-rotate-right"></i> Reset</button>
+                                            <button onClick={deleteAllGroups} className="bg-red-50 text-red-600 px-4 py-2.5 rounded-xl font-bold flex-1 sm:flex-none"><i className="fa-solid fa-trash-can"></i> Xóa tất cả</button>
+                                            <button onClick={() => setGroupModal({ show: true, mode: 'add', data: { name: '', url: '' } })} className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-bold w-full sm:w-auto"><i className="fa-solid fa-plus"></i> Thêm Nơi đăng</button>
+                                        </div>
+                                    </div>
+
+                                    {postingGroups.length === 0 ? (
+                                        <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-8 sm:p-16 flex flex-col items-center justify-center text-center shadow-sm">
+                                            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-4 sm:mb-6">
+                                                <i className="fa-solid fa-share-nodes text-3xl sm:text-4xl text-indigo-400"></i>
+                                            </div>
+                                            <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Chưa có danh sách</h3>
+                                            <p className="text-gray-500 mb-6 max-w-md text-base sm:text-lg">Bạn có thể tự thêm từng nhóm, hoặc bấm nút Tải nhanh 17 nhóm đã được thiết lập sẵn.</p>
+                                            <div className="flex gap-3">
+                                                <button onClick={importDefaultGroups} className="text-emerald-600 font-bold text-base hover:text-emerald-800 bg-emerald-50 px-5 py-2.5 rounded-xl transition-colors border border-emerald-100">
+                                                    <i className="fa-solid fa-cloud-arrow-down"></i> Nạp tự động
+                                                </button>
+                                                <button onClick={() => setGroupModal({ show: true, mode: 'add', data: { name: '', url: '' } })} className="text-indigo-600 font-bold text-base hover:text-indigo-800 bg-indigo-50 px-5 py-2.5 rounded-xl transition-colors">
+                                                    Thêm thủ công
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="flex flex-col gap-6">
+                                            {Object.entries(groupedData).map(([category, groups]) => (
+                                                <div key={category} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                                                    <h2 className="font-extrabold text-indigo-900 mb-4 border-b-2 border-indigo-50 pb-2 uppercase"><i className="fa-solid fa-map-location-dot"></i> {category}</h2>
+                                                    <div className="flex flex-col gap-2">
+                                                        {groups.map(group => (
+                                                            <div key={group.id || Math.random()} className={`flex justify-between p-3 border rounded-xl group hover:border-indigo-300 ${group.isPosted ? 'bg-emerald-50/50 border-emerald-200' : 'border-gray-200'}`}>
+                                                                <div className="flex gap-3 items-center">
+                                                                    <button onClick={() => toggleGroupStatus(group)} className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${group.isPosted ? 'bg-emerald-500 border-emerald-500 text-white' : 'text-transparent border-gray-300'}`}><i className="fa-solid fa-check text-[10px]"></i></button>
+                                                                    <span className={`font-semibold ${group.isPosted ? 'line-through text-gray-400' : 'text-gray-800'}`}>{group.displayName}</span>
+                                                                </div>
+                                                                <div className="flex gap-2">
+                                                                    {group.url && <a href={group.url} target="_blank" onClick={() => toggleGroupStatus(group, true)} className="px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-sm font-bold">Mở</a>}
+                                                                    <button onClick={() => setGroupModal({ show: true, mode: 'edit', data: group })} className="opacity-0 group-hover:opacity-100 w-7 h-7 text-gray-500 hover:bg-gray-100 rounded-md"><i className="fa-solid fa-pen text-xs"></i></button>
+                                                                    <button onClick={() => handleDeleteGroup(group.id)} className="opacity-0 group-hover:opacity-100 w-7 h-7 text-red-500 hover:bg-red-50 rounded-md"><i className="fa-solid fa-trash text-xs"></i></button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {currentView === 'list' && (
+                                <div>
+                                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-end mb-6 sm:mb-8 gap-4">
+                                        <div><h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900">Chiến dịch của bạn</h1></div>
+                                        <button onClick={handleCreateNew} className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold"><i className="fa-solid fa-plus"></i> Bắt đầu soạn bài</button>
+                                    </div>
+
+                                    {posts.length === 0 ? (
+                                        <div className="bg-white rounded-2xl border border-dashed border-gray-300 p-8 sm:p-16 flex flex-col items-center justify-center text-center shadow-sm">
+                                            <div className="w-16 h-16 sm:w-20 sm:h-20 bg-indigo-50 rounded-full flex items-center justify-center mb-4 sm:mb-6">
+                                                <i className="fa-solid fa-wand-magic-sparkles text-3xl sm:text-4xl text-indigo-400"></i>
+                                            </div>
+                                            <h3 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">Chưa có dữ liệu</h3>
+                                            <button onClick={handleCreateNew} className="text-indigo-600 font-bold text-base sm:text-lg hover:text-indigo-800 flex items-center gap-2 bg-indigo-50 px-5 py-2.5 rounded-xl">
+                                                Trải nghiệm ngay <i className="fa-solid fa-arrow-right"></i>
+                                            </button>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8">
+                                            {posts.map(post => {
+                                                const images = post.imageUrls && post.imageUrls.length > 0 ? post.imageUrls : (post.imageUrl ? [post.imageUrl] : []);
+                                                const coverImage = images[0];
+                                                const extraImagesCount = images.length - 1;
+
+                                                const currentTab = activePostTabs[post.id] || 1;
+                                                const currentContent = post[`content${currentTab}`] || post.content || '';
+                                                const surveyCount = post.surveyImages?.length || 0;
+
+                                                return (
+                                                    <div key={post.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col relative group">
+
+                                                        {/* Nhãn "Đã Khảo Sát" */}
+                                                        {surveyCount > 0 && (
+                                                            <div className="absolute top-3 left-3 z-10 bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-xs font-extrabold shadow-md flex items-center gap-1.5">
+                                                                <i className="fa-solid fa-camera-retro"></i> {surveyCount} Ảnh Khảo sát
+                                                            </div>
+                                                        )}
+
+                                                        <div className="relative w-full h-48 bg-gray-50 border-b border-gray-100 rounded-t-2xl overflow-hidden">
+                                                            {images[0] ? <img src={images[0]} className="w-full h-full object-cover" /> : <div className="w-full h-full flex justify-center items-center text-gray-300"><i className="fa-regular fa-image text-4xl"></i></div>}
+                                                        </div>
+
+                                                        <div className="p-5 flex-1 flex flex-col">
+                                                            <h3 className="text-lg font-bold text-gray-900 line-clamp-2 mb-3">{post.title}</h3>
+
+                                                            {post.internalInfo && (
+                                                                <div className="mb-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                                                    <div className="text-amber-700 font-extrabold text-xs mb-1"><i className="fa-solid fa-lock"></i> NỘI BỘ</div>
+                                                                    <div className="text-xs text-amber-900 max-h-24 overflow-y-auto whitespace-pre-wrap">{post.internalInfo}</div>
+                                                                </div>
+                                                            )}
+
+                                                            {(post.content1 || post.content2 || post.content3) && (
+                                                                <div className="flex gap-1 mb-3 bg-gray-50 p-1 rounded-lg">
+                                                                    {[1,2,3].map(t => <button key={t} onClick={() => setActivePostTabs(prev => ({...prev, [post.id]: t}))} className={`flex-1 py-1 text-[10px] font-bold rounded-md ${currentTab === t ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500'}`}>{t===1?'Chuyên nghiệp':t===2?'Kể chuyện':'Ngắn gọn'}</button>)}
+                                                                </div>
+                                                            )}
+
+                                                            <p className="text-sm text-gray-500 line-clamp-3 mb-4 flex-1">{currentContent}</p>
+
+                                                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                                                <span className="text-xs text-gray-400 font-medium"><i className="fa-regular fa-clock"></i> {post.date}</span>
+                                                                <div className="flex gap-1">
+
+                                                                    <button onClick={() => setSurveyModal({ show: true, post: post })} className="p-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-600 hover:text-white rounded-xl font-bold" title="Khảo sát thực tế">
+                                                                        <i className="fa-solid fa-map-location-dot"></i>
+                                                                    </button>
+
+                                                                    {post.videoUrl && <a href={post.videoUrl} target="_blank" className="p-2 text-pink-600 bg-pink-50 hover:bg-pink-600 hover:text-white rounded-xl"><i className="fa-solid fa-play"></i></a>}
+                                                                    <button onClick={() => handleGenerateVideo(post, currentContent)} disabled={generatingVideoId === post.id} className="p-2 text-purple-600 bg-purple-50 hover:bg-purple-600 hover:text-white rounded-xl">
+                                                                        {generatingVideoId === post.id ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-solid fa-video"></i>}
+                                                                    </button>
+                                                                    <button onClick={() => { if (post.videoUrl) setPostOptionsModal({ show: true, post: post, selectedContent: currentContent }); else handlePostToFacebook(post, 'image', currentContent); }} disabled={postingFbId === post.id} className="p-2 text-blue-600 bg-blue-50 hover:bg-blue-600 hover:text-white rounded-xl">
+                                                                        {postingFbId === post.id ? <i className="fa-solid fa-spinner fa-spin"></i> : <i className="fa-brands fa-facebook-f"></i>}
+                                                                    </button>
+                                                                    <button onClick={() => setDownloadModal({ show: true, post: post })} className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-xl"><i className="fa-solid fa-download"></i></button>
+                                                                    <button onClick={() => copyTextOnly(currentContent, 'Đã copy đoạn mô tả!')} className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl"><i className="fa-solid fa-copy"></i></button>
+                                                                    <button onClick={() => handleEdit(post)} className="p-2 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded-xl"><i className="fa-solid fa-pen"></i></button>
+                                                                    <button onClick={() => handleDelete(post.id)} className="p-2 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-xl"><i className="fa-solid fa-trash"></i></button>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {currentView === 'editor' && (
+                                <div className="max-w-6xl mx-auto">
+                                    <div className="flex flex-col sm:flex-row justify-between items-center mb-8 bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                                        <h1 className="text-2xl font-extrabold text-gray-900">{formData.id && posts.find(p => p.id === formData.id) ? 'Sửa bài' : 'Tạo mới'}</h1>
+                                        <div className="flex gap-3">
+                                            <button onClick={() => setCurrentView('list')} className="px-5 py-2.5 bg-gray-50 text-gray-600 font-bold rounded-xl hover:bg-gray-100">Hủy</button>
+                                            <button onClick={handleSavePost} className="px-6 py-2.5 bg-indigo-600 text-white font-bold rounded-xl hover:bg-indigo-700 shadow-md shadow-indigo-200"><i className="fa-solid fa-floppy-disk"></i> Lưu</button>
+                                        </div>
+                                    </div>
+
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                                        {/* TRÁI */}
+                                        <div className="flex flex-col gap-6">
+                                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                                <label className="block text-lg font-bold mb-2">Tên chiến dịch</label>
+                                                <input type="text" value={formData.title} onChange={(e) => setFormData({...formData, title: e.target.value})} className="w-full p-4 bg-gray-50 rounded-xl outline-none" />
+                                            </div>
+                                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex-1 flex flex-col">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <label className="text-lg font-bold">Dữ liệu thô (AI đọc)</label>
+                                                    <div className="relative">
+                                                        <input type="file" accept="image/*" id="rawImageInput" className="hidden" onChange={handleRawImageUpload} />
+                                                        <label htmlFor="rawImageInput" className="cursor-pointer text-white bg-gray-800 px-4 py-2 rounded-xl font-bold"><i className="fa-solid fa-camera"></i> Tải ảnh</label>
+                                                    </div>
+                                                </div>
+                                                {formData.rawImage && (
+                                                    <div className="relative mb-4 inline-block"><img src={formData.rawImage} className="h-32 rounded-xl object-cover" /><button onClick={() => setFormData(prev => ({...prev, rawImage: ''}))} className="absolute -top-2 -right-2 bg-red-500 text-white w-6 h-6 rounded-full"><i className="fa-solid fa-xmark text-xs"></i></button></div>
+                                                )}
+                                                <textarea value={formData.rawText} onChange={(e) => setFormData({...formData, rawText: e.target.value})} className="w-full p-4 bg-gray-50 rounded-xl outline-none min-h-[150px] mb-4" placeholder="Dán thông số hoặc nội dung lộn xộn vào đây..."></textarea>
+
+                                                <div className="bg-amber-50 p-4 rounded-xl">
+                                                    <label className="text-sm font-bold text-amber-800 mb-2 block"><i className="fa-solid fa-lock"></i> Nội bộ (Ẩn)</label>
+                                                    <textarea value={formData.internalInfo} onChange={(e) => setFormData({...formData, internalInfo: e.target.value})} className="w-full p-3 bg-white rounded-lg outline-none min-h-[100px] text-sm text-amber-900"></textarea>
+                                                </div>
+
+                                                <button onClick={handleGenerateAI} disabled={isGenerating} className="mt-6 w-full py-4 bg-indigo-600 text-white font-bold rounded-xl shadow-lg shadow-indigo-200">
+                                                    {isGenerating ? <i className="fa-solid fa-spinner fa-spin"></i> : <><i className="fa-solid fa-wand-magic-sparkles"></i> Phân tích bằng AI</>}
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* PHẢI */}
+                                        <div className="flex flex-col gap-6">
+                                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col flex-1">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <label className="text-lg font-bold"><i className="fa-brands fa-facebook text-blue-600"></i> Đăng Facebook</label>
+                                                    <button onClick={() => copyTextOnly(formData[`content${editorTab}`] || formData.content, 'Đã copy!')} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-sm"><i className="fa-solid fa-copy"></i> Copy</button>
+                                                </div>
+                                                <div className="flex gap-2 mb-4 bg-gray-50 p-1.5 rounded-xl">
+                                                    {[1,2,3].map(t => <button key={t} onClick={() => setEditorTab(t)} className={`flex-1 py-2 text-sm font-bold rounded-lg ${editorTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>{t===1?'Chuyên nghiệp':t===2?'Kể chuyện':'Ngắn gọn'}</button>)}
+                                                </div>
+                                                <textarea value={formData[`content${editorTab}`] || formData.content || ''} onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, [`content${editorTab}`]: val, ...(editorTab === 1 ? { content: val } : {}) })); }} className="w-full p-5 bg-gray-50 rounded-xl outline-none flex-1 min-h-[250px]"></textarea>
+                                            </div>
+
+                                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <label className="text-lg font-bold">Ảnh Facebook (Public)</label>
+                                                    <div className="relative"><input type="file" multiple accept="image/*" id="multiImageInput" className="hidden" onChange={handleMultipleImageUpload} /><label htmlFor="multiImageInput" className="cursor-pointer bg-gray-100 px-4 py-2 rounded-xl font-bold text-sm"><i className="fa-solid fa-plus"></i> Thêm</label></div>
+                                                </div>
+                                                <div className="grid grid-cols-3 gap-3">
+                                                    {formData.imageUrls.map((url, index) => (
+                                                        <div key={index} className="relative rounded-xl overflow-hidden aspect-square group">
+                                                            <img src={url} className="w-full h-full object-cover" />
+                                                            <button onClick={(e) => { e.preventDefault(); openImageEditor(index); }} className="absolute top-2 right-10 bg-indigo-500 text-white w-7 h-7 rounded-lg"><i className="fa-solid fa-wand-magic-sparkles text-xs"></i></button>
+                                                            <button onClick={() => removeUploadedImage(index)} className="absolute top-2 right-2 bg-red-500 text-white w-7 h-7 rounded-lg"><i className="fa-solid fa-trash text-xs"></i></button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </main>
+                    </div>
+                );
+            }
+
+            const startReactApp = () => {
+                const rootElement = document.getElementById('root');
+                try {
+                    const root = ReactDOM.createRoot(rootElement);
+                    root.render(<App />);
+                } catch (err) {
+                    console.error("Lỗi:", err);
+                    rootElement.innerHTML = `<div style="padding: 20px; color: red;"><h3>⚠️ Lỗi:</h3><p>${err.message}</p></div>`;
+                }
+            };
+
+            if (window.FirebaseAPI) { startReactApp(); }
+            else { window.addEventListener('firebase-loaded', startReactApp); setTimeout(startReactApp, 1000); }
+        };
+
+        initApp();
+    </script>
+</body>
+</html>
