@@ -2,14 +2,16 @@
 <html lang="vi">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI Scribe Pro v2.3 - Bất Động Sản</title>
-		<link rel="manifest" href="manifest.json">
-		    <meta name="theme-color" content="#4f46e5">
-		    <link rel="apple-touch-icon" href="icon.png">
-		    <meta name="apple-mobile-web-app-capable" content="yes">
-		    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4f46e5">
+    <link rel="apple-touch-icon" href="icon.png">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="AI Scribe">
+
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -299,7 +301,7 @@
                 };
 
                 // ===============================================================================
-                // BỘ LỌC AN TOÀN ĐĂNG TIN (CHỐNG SẬP MÀN HÌNH)
+                // QUẢN LÝ GROUP
                 // ===============================================================================
                 const handleSaveGroup = async (e) => {
                     e.preventDefault(); if (!groupModal.data.name) { showToast('⚠️ Vui lòng nhập tên Group/Trang!'); return; }
@@ -413,6 +415,9 @@
                     }
                 };
 
+                // ===============================================================================
+                // CREATOMATE & DOWLOAD
+                // ===============================================================================
                 const handleGenerateVideo = async (post, customContent = null) => {
                     let imagesToUse = post.imageUrls || []; if (imagesToUse.length === 0 && post.imageUrl) { imagesToUse = [post.imageUrl]; }
                     if (imagesToUse.length < 2) { showToast("⚠️ Cần ít nhất 2 bức ảnh để ghép thành video chuyển cảnh!"); return; }
@@ -586,6 +591,9 @@
                     if (file) { const compressedBase64 = await compressImage(file); setFormData(prev => ({ ...prev, rawImage: compressedBase64 })); }
                 };
 
+                // ===============================================================================
+                // AI GENERATION CHÍNH THỨC
+                // ===============================================================================
                 const handleGenerateAI = async () => {
                     if (!formData.rawText && !formData.rawImage) { showToast('Vui lòng nhập dữ liệu thô hoặc tải ảnh lên!'); return; }
                     setIsGenerating(true);
@@ -593,17 +601,8 @@
 
                     try {
                         showToast('⚡ Đang dịch mã & trích xuất địa chỉ tốc độ cao...');
-                        let activeModel = "gemini-1.5-flash-latest";
-                        try {
-                            const checkRes = await fetch("https://generativelanguage.googleapis.com/v1beta/models?key=" + apiKey);
-                            if (checkRes.ok) {
-                                const modelData = await checkRes.json(); const available = modelData.models.map(m => m.name);
-                                if (available.includes("models/gemini-2.5-flash")) activeModel = "gemini-2.5-flash";
-                                else if (available.includes("models/gemini-2.0-flash")) activeModel = "gemini-2.0-flash";
-                                else if (available.includes("models/gemini-1.5-flash")) activeModel = "gemini-1.5-flash";
-                            }
-                        } catch (e) {}
 
+                        const activeModel = "gemini-1.5-flash";
                         const url = "https://generativelanguage.googleapis.com/v1beta/models/" + activeModel + ":generateContent?key=" + apiKey;
 
                         const prompt = `Bạn là trợ lý đắc lực của chuyên gia môi giới bất động sản. Hãy đọc chuỗi dữ liệu viết tắt do môi giới cung cấp và thực hiện 2 nhiệm vụ sau NHANH NHẤT CÓ THỂ (Bỏ qua các bước tính toán, đánh giá rườm rà):
@@ -659,7 +658,6 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                         const result = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: parts }] }) });
                         let generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
-                        // BỘ LỌC LÀM SẠCH DIỆT TẬN GỐC TẤT CẢ KÝ TỰ SAO (*) TRONG VĂN BẢN
                         generatedText = generatedText.replace(/\*/g, '');
 
                         let aiTitle = '';
@@ -681,7 +679,6 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                             if (lines.length > 1 && lines[0].length < 100) { aiTitle = lines[0].replace(/_|-|#|TIÊU ĐỀ:/gi, '').trim(); c1 = lines.slice(1).join('\n').replace(/NỘI DUNG 1:/gi, '').trim(); }
                         }
 
-                        // ÉP ĐỊA CHỈ VỪA LẤY ĐƯỢC CHÈN THẲNG VÀO TÊN CHIẾN DỊCH (Ghi đè luôn dữ liệu cũ nếu có)
                         setFormData(prev => ({
                             ...prev,
                             internalInfo: internal,
@@ -693,7 +690,10 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                         }));
 
                         setEditorTab(1); showToast('✨ Đã giải mã thông tin & sáng tạo bài viết siêu tốc!');
-                    } catch (error) { showToast(error.message === "Failed to fetch" ? "Lỗi mạng hoặc kết nối bị chặn." : `LỖI: ${error.message}`); }
+                    } catch (error) {
+                        console.error("AI Error:", error);
+                        showToast(error.message === "Failed to fetch" ? "Lỗi mạng hoặc kết nối bị chặn." : `LỖI: ${error.message}`);
+                    }
                     finally { setIsGenerating(false); }
                 };
 
@@ -768,7 +768,6 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                     setFormData(prev => ({ ...prev, imageUrls: prev.imageUrls.filter((_, index) => index !== indexToRemove) }));
                 };
 
-                // LỌC DỮ LIỆU GROUP AN TOÀN TRƯỚC KHI HIỂN THỊ
                 const groupedData = (postingGroups || []).reduce((acc, g) => {
                     try {
                         if (!g) return acc;
@@ -1151,7 +1150,6 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                                                 return (
                                                     <div key={post.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm flex flex-col relative group">
 
-                                                        {/* Nhãn "Đã Khảo Sát" */}
                                                         {surveyCount > 0 && (
                                                             <div className="absolute top-3 left-3 z-10 bg-emerald-500 text-white px-2.5 py-1 rounded-lg text-xs font-extrabold shadow-md flex items-center gap-1.5">
                                                                 <i className="fa-solid fa-camera-retro"></i> {surveyCount} Ảnh Khảo sát
