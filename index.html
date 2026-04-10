@@ -88,6 +88,7 @@
                 const [showFbConfig, setShowFbConfig] = useState(false);
                 const [fbPageId, setFbPageId] = useState(() => safeGetStorage('fbPageId', DEFAULT_FB_PAGE_ID));
                 const [fbToken, setFbToken] = useState(() => safeGetStorage('fbToken', DEFAULT_FB_TOKEN));
+                const [geminiApiKey, setGeminiApiKey] = useState(() => safeGetStorage('geminiApiKey', ''));
                 const [postingFbId, setPostingFbId] = useState(null);
                 const [generatingVideoId, setGeneratingVideoId] = useState(null);
 
@@ -162,11 +163,17 @@
                     setTimeout(() => setToastMessage(''), 5500);
                 };
 
-                const saveFbConfig = () => {
+                const saveSettings = () => {
                     const cleanedToken = fbToken.trim();
-                    if (cleanedToken.includes("EAAAAAAAA")) { showToast('❌ LỖI MÃ: Mã Token này bị hỏng.'); return; }
-                    try { localStorage.setItem('fbPageId', fbPageId.trim()); localStorage.setItem('fbToken', cleanedToken); } catch(e) {}
-                    setShowFbConfig(false); showToast('✅ Đã cập nhật cài đặt Facebook!');
+                    const cleanedGeminiKey = geminiApiKey.trim();
+                    if (cleanedToken.includes("EAAAAAAAA")) { showToast('❌ LỖI MÃ FB: Mã Token này bị hỏng.'); return; }
+                    try {
+                        localStorage.setItem('fbPageId', fbPageId.trim());
+                        localStorage.setItem('fbToken', cleanedToken);
+                        localStorage.setItem('geminiApiKey', cleanedGeminiKey);
+                    } catch(e) {}
+                    setShowFbConfig(false);
+                    showToast('✅ Đã lưu cấu hình hệ thống!');
                 };
 
                 // ===============================================================================
@@ -591,19 +598,20 @@
                     if (file) { const compressedBase64 = await compressImage(file); setFormData(prev => ({ ...prev, rawImage: compressedBase64 })); }
                 };
 
-                // ===============================================================================
-                // AI GENERATION CHÍNH THỨC
-                // ===============================================================================
                 const handleGenerateAI = async () => {
                     if (!formData.rawText && !formData.rawImage) { showToast('Vui lòng nhập dữ liệu thô hoặc tải ảnh lên!'); return; }
+
+                    const apiKey = geminiApiKey.trim();
+                    if (!apiKey) {
+                        showToast('⚠️ Bạn chưa thiết lập API Key! Vui lòng mở Cài đặt (nút Bánh răng) để điền.');
+                        setShowFbConfig(true);
+                        return;
+                    }
+
                     setIsGenerating(true);
-                    const apiKey = "AIzaSyCDnyFXklZffHvtiHXzvLyr02Voi0O_0Cg";
 
                     try {
-                        showToast('⚡ Đang dịch mã & trích xuất địa chỉ tốc độ cao...');
-
-                        const activeModel = "gemini-1.5-flash";
-                        const url = "https://generativelanguage.googleapis.com/v1beta/models/" + activeModel + ":generateContent?key=" + apiKey;
+                        showToast('⚡ Đang tự động kiểm tra quyền tài khoản Google...');
 
                         const prompt = `Bạn là trợ lý đắc lực của chuyên gia môi giới bất động sản. Hãy đọc chuỗi dữ liệu viết tắt do môi giới cung cấp và thực hiện 2 nhiệm vụ sau NHANH NHẤT CÓ THỂ (Bỏ qua các bước tính toán, đánh giá rườm rà):
 
@@ -655,7 +663,57 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                             parts.push({ inlineData: { mimeType: mimeType, data: base64Data } });
                         }
 
-                        const result = await fetchWithRetry(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ role: "user", parts: parts }] }) });
+                        const payload = { contents: [{ role: "user", parts: parts }] };
+
+                        // BƯỚC 1: HỎI THẲNG GOOGLE XEM API KEY NÀY ĐƯỢC DÙNG NHỮNG AI NÀO
+                        const listRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+                        if (!listRes.ok) {
+                            const errData = await listRes.json().catch(() => ({}));
+                            throw new Error(errData.error?.message || "API Key không hợp lệ hoặc bị Google chặn.");
+                        }
+
+                        const data = await listRes.json();
+                        const availableModels = data.models || [];
+
+                        // Lọc ra các mô hình cho phép tạo văn bản
+                        const validModels = availableModels.filter(m => m.supportedGenerationMethods?.includes("generateContent"));
+                        if (validModels.length === 0) throw new Error("Tài khoản của bạn không được cấp quyền sử dụng AI.");
+
+                        // Ưu tiên chọn Gemini 1.5 Flash vì nó nhanh và hỗ trợ ảnh tốt nhất
+                        const hasImage = !!formData.rawImage;
+                        let selected = null;
+
+                        if (hasImage) {
+                            selected = validModels.find(m => m.name.includes("1.5-flash")) ||
+                                       validModels.find(m => m.name.includes("1.5-pro")) ||
+                                       validModels.find(m => m.name.includes("vision"));
+                        } else {
+                            selected = validModels.find(m => m.name.includes("1.5-flash")) ||
+                                       validModels.find(m => m.name.includes("pro")) ||
+                                       validModels[0];
+                        }
+
+                        if (!selected) selected = validModels[0];
+
+                        const targetModel = selected.name.replace('models/', '');
+                        console.log("Đã tìm thấy AI phù hợp:", targetModel);
+                        showToast(`🚀 Đang phân tích tốc độ cao bằng ${targetModel}...`);
+
+                        // BƯỚC 2: GỬI LỆNH ĐẾN ĐÚNG AI ĐÓ
+                        const url = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+                        const res = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!res.ok) {
+                            const errData = await res.json().catch(() => ({}));
+                            throw new Error(errData.error?.message || `HTTP ${res.status}`);
+                        }
+
+                        const result = await res.json();
+
                         let generatedText = result.candidates?.[0]?.content?.parts?.[0]?.text || '';
 
                         generatedText = generatedText.replace(/\*/g, '');
@@ -692,7 +750,11 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                         setEditorTab(1); showToast('✨ Đã giải mã thông tin & sáng tạo bài viết siêu tốc!');
                     } catch (error) {
                         console.error("AI Error:", error);
-                        showToast(error.message === "Failed to fetch" ? "Lỗi mạng hoặc kết nối bị chặn." : `LỖI: ${error.message}`);
+                        if (error.message.includes("API_KEY_INVALID")) {
+                            showToast('❌ LỖI API: API Key của bạn bị sai hoặc đã bị Google khóa. Hãy tạo Key mới!');
+                        } else {
+                            showToast(error.message === "Failed to fetch" ? "Lỗi mạng. Vui lòng kiểm tra kết nối Internet." : `LỖI: ${error.message}`);
+                        }
                     }
                     finally { setIsGenerating(false); }
                 };
@@ -1017,13 +1079,22 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                             <div className="fixed inset-0 z-50 bg-gray-900/60 backdrop-blur flex items-center justify-center p-4">
                                 <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
                                     <div className="flex justify-between items-center mb-5">
-                                        <h3 className="text-xl font-bold text-gray-900"><i className="fa-brands fa-facebook text-blue-600 mr-2"></i> Cài đặt Fanpage</h3>
+                                        <h3 className="text-xl font-bold text-gray-900"><i className="fa-solid fa-gear text-gray-600 mr-2"></i> Cài đặt Hệ thống</h3>
                                         <button onClick={() => setShowFbConfig(false)} className="text-gray-400 hover:text-red-500"><i className="fa-solid fa-xmark text-xl"></i></button>
                                     </div>
-                                    <div className="space-y-4">
-                                        <div><label className="block text-sm font-bold text-gray-700 mb-1">Fanpage ID</label><input type="text" value={fbPageId} onChange={e => setFbPageId(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none"/></div>
-                                        <div><label className="block text-sm font-bold text-gray-700 mb-1">Page Access Token</label><input type="password" value={fbToken} onChange={e => setFbToken(e.target.value)} className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl outline-none"/></div>
-                                        <button onClick={saveFbConfig} className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl mt-4">Lưu Cài Đặt</button>
+                                    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+                                        <div className="p-4 bg-indigo-50 border border-indigo-100 rounded-xl">
+                                            <label className="block text-sm font-bold text-indigo-900 mb-2"><i className="fa-solid fa-wand-magic-sparkles"></i> API Key Google Gemini (AI)</label>
+                                            <input type="password" value={geminiApiKey} onChange={e => setGeminiApiKey(e.target.value)} placeholder="AIzaSy..." className="w-full p-3 bg-white border border-indigo-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500"/>
+                                            <p className="text-xs text-indigo-600 mt-2 font-medium">Bảo mật tuyệt đối: Key chỉ lưu trên trình duyệt của máy tính bạn.</p>
+                                        </div>
+                                        <div className="p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                                            <label className="block text-sm font-bold text-blue-900 mb-2"><i className="fa-brands fa-facebook"></i> Fanpage ID</label>
+                                            <input type="text" value={fbPageId} onChange={e => setFbPageId(e.target.value)} className="w-full p-3 bg-white border border-blue-200 rounded-xl outline-none mb-3"/>
+                                            <label className="block text-sm font-bold text-blue-900 mb-2"><i className="fa-solid fa-key"></i> Page Access Token</label>
+                                            <input type="password" value={fbToken} onChange={e => setFbToken(e.target.value)} className="w-full p-3 bg-white border border-blue-200 rounded-xl outline-none"/>
+                                        </div>
+                                        <button onClick={saveSettings} className="w-full py-3.5 bg-gray-800 hover:bg-gray-900 text-white font-bold rounded-xl mt-4 shadow-md transition-colors">Lưu Cài Đặt</button>
                                     </div>
                                 </div>
                             </div>
