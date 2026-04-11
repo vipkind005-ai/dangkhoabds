@@ -74,7 +74,7 @@
 
                 const [formData, setFormData] = useState({
                     id: null, title: '', rawText: '', rawImage: '', internalInfo: '',
-                    content1: '', content2: '', content3: '', content: '', imageUrls: [],
+                    content1: '', content2: '', content3: '', content4: '', content: '', imageUrls: [],
                     surveyImages: [], surveyNotes: ''
                 });
 
@@ -158,9 +158,10 @@
                     return () => { unsubscribePosts(); unsubscribeGroups(); };
                 }, [user, db]);
 
-                const showToast = (message) => {
+                // RÚT NGẮN THỜI GIAN HIỂN THỊ THÔNG BÁO XUỐNG CÒN 3 GIÂY MẶC ĐỊNH
+                const showToast = (message, duration = 3000) => {
                     setToastMessage(message);
-                    setTimeout(() => setToastMessage(''), 5500);
+                    setTimeout(() => setToastMessage(''), duration);
                 };
 
                 const saveSettings = () => {
@@ -467,11 +468,12 @@
                     finally { setGeneratingVideoId(null); }
                 };
 
+                // ÉP THÔNG BÁO COPY CHỈ HIỂN THỊ TRONG 1.5 GIÂY RỒI TẮT NGAY
                 const copyTextOnly = (text, successMsg = 'Đã copy!') => {
-                    if (!text) { showToast('Chưa có nội dung để copy!'); return; }
+                    if (!text) { showToast('Chưa có nội dung để copy!', 2000); return; }
                     const textArea = document.createElement("textarea"); textArea.value = text; document.body.appendChild(textArea); textArea.select();
-                    try { document.execCommand('copy'); showToast(`✅ ${successMsg}`); }
-                    catch (err) { showToast('❌ Không thể copy.'); }
+                    try { document.execCommand('copy'); showToast(`✅ ${successMsg}`, 1500); }
+                    catch (err) { showToast('❌ Không thể copy.', 2000); }
                     document.body.removeChild(textArea);
                 };
 
@@ -559,7 +561,7 @@
                 };
 
                 const handleCreateNew = () => {
-                    setFormData({ id: Date.now().toString(), title: '', rawText: '', rawImage: '', internalInfo: '', content1: '', content2: '', content3: '', content: '', imageUrls: [], surveyImages: [], surveyNotes: '' });
+                    setFormData({ id: Date.now().toString(), title: '', rawText: '', rawImage: '', internalInfo: '', content1: '', content2: '', content3: '', content4: '', content: '', imageUrls: [], surveyImages: [], surveyNotes: '' });
                     setEditorTab(1); setCurrentView('editor');
                 };
 
@@ -611,28 +613,31 @@
                     setIsGenerating(true);
 
                     try {
-                        showToast('⚡ Đang tự động kiểm tra quyền tài khoản Google...');
+                        showToast('⚡ Đang phân tích chiến thuật BĐS tốc độ cao...');
 
-                        const prompt = `Bạn là trợ lý đắc lực của chuyên gia môi giới bất động sản. Hãy đọc chuỗi dữ liệu viết tắt do môi giới cung cấp và thực hiện 2 nhiệm vụ sau NHANH NHẤT CÓ THỂ (Bỏ qua các bước tính toán, đánh giá rườm rà):
+                        const prompt = `Bạn là trợ lý đắc lực của top sales bất động sản. Hãy đọc chuỗi dữ liệu viết tắt do môi giới cung cấp và thực hiện 2 nhiệm vụ sau NHANH NHẤT CÓ THỂ:
 
-NHIỆM VỤ 1: GIẢI MÃ THÔNG TIN NỘI BỘ
-Bóc tách chuỗi viết tắt thành thông tin rõ ràng. KHÔNG CẦN TÍNH ĐƠN GIÁ. KHÔNG CẦN ĐÁNH GIÁ MỨC GIÁ TỐT HAY XẤU. Chỉ cần dịch ra thông số đơn thuần. Nếu thông tin nào không có, ghi "Không rõ".
+NHIỆM VỤ 1: GIẢI MÃ THÔNG TIN NỘI BỘ (Giữ nguyên số liệu thật)
+Bóc tách chuỗi viết tắt thành thông tin rõ ràng. KHÔNG CẦN TÍNH ĐƠN GIÁ. Nếu thông tin nào không có, ghi "Không rõ". Phần này để Môi giới đọc.
 
-NHIỆM VỤ 2: VIẾT BÀI ĐĂNG FACEBOOK VÀ TRÍCH XUẤT TIÊU ĐỀ
-Sử dụng các thông tin an toàn để viết 3 mẫu bài đăng Facebook.
-- BẢO MẬT ĐỊA CHỈ: TUYỆT ĐỐI KHÔNG ghi chi tiết số nhà/hẻm cụ thể vào 3 bài đăng Facebook. Chỉ ghi Phường, Quận hoặc Tên Đường.
-- TRÌNH BÀY RÕ RÀNG: Các thông số của căn nhà (Diện tích, Kết cấu, Tình trạng, Đường/Hẻm, Giá bán...) PHẢI được liệt kê tách bạch, mỗi thông số MỘT DÒNG (xuống dòng rõ ràng).
-- ICON CHUYÊN NGHIỆP: Sử dụng các biểu tượng (icon) bắt mắt ở đầu mỗi dòng thông số để tạo sự thu hút (VD: 📍 Vị trí, 📐 Diện tích, 🏗️ Kết cấu, 🚘 Hẻm, 💰 Giá bán, ⚖️ Pháp lý...).
-- ĐỊNH DẠNG SẠCH SẼ: TUYỆT ĐỐI KHÔNG SỬ DỤNG KÝ TỰ SAO (*, **) HAY MARKDOWN ĐỂ IN ĐẬM HOẶC LÀM DẤU ĐẦU DÒNG. Văn bản phải trơn tru, sạch sẽ, chỉ dùng Emoji hoặc dấu gạch ngang (-) để liệt kê.
-- CÚ PHÁP CHỐT HẠ: Bắt buộc chèn chính xác khối thông tin sau ở cuối MỖI BÀI VIẾT (Không dùng hashtag):
+NHIỆM VỤ 2: VIẾT BÀI ĐĂNG FACEBOOK THEO CHIẾN THUẬT TÂM LÝ
+Tạo ra 4 phiên bản bài đăng NGẮN GỌN theo các QUY TẮC NGHIÊM NGẶT sau:
+1. BẢO MẬT ĐỊA CHỈ: TUYỆT ĐỐI KHÔNG ghi chi tiết số nhà/hẻm cụ thể vào 4 bài đăng Facebook. Chỉ ghi Phường, Quận hoặc Tên Đường.
+2. ĐỊNH VỊ KHU VỰC & KẾT NỐI: Dựa vào địa chỉ, HÃY TỰ ĐỘNG bổ sung thêm: Các tuyến đường giao cắt liền kề, CÁC QUẬN GIÁP RANH THUẬN TIỆN DI CHUYỂN (Ví dụ: "Sát vách Quận 10, Phú Nhuận..."), và các địa điểm/tiện ích nổi bật xung quanh.
+3. CHIẾN THUẬT KÍCH THƯỚC (QUAN TRỌNG): Hãy GIỮ LẠI 1 TRONG 2 thông số (hoặc chỉ ghi Chiều Ngang, hoặc chỉ ghi Chiều Dài) và giấu thông số còn lại đi.
+4. CHIẾN THUẬT DIỆN TÍCH: Nếu nhà có kết cấu nhiều tầng (trệt, lầu), hãy tự tính và CHỈ HIỂN THỊ "Diện Tích Sử Dụng (DTSD)" thay vì nhấn mạnh diện tích đất thật.
+5. CHIẾN THUẬT LÀM TRÒN GIÁ: Làm tròn giá bán để tạo tò mò. Ví dụ: 7.8 tỷ -> "Nhỉnh 7 tỷ", 4.2 tỷ -> "Hơn 4 tỷ", 5.9 tỷ -> "Gần 6 tỷ". Tuyệt đối không ghi số thập phân chi tiết.
+6. HOOK (MỞ BÀI): Đưa ngay 2-3 điểm mạnh "chốt sale" nhất (Hẻm xe hơi, Dòng tiền, DTSD khủng...) lên ngay 2 DÒNG ĐẦU TIÊN của mỗi bài viết.
+7. TRÌNH BÀY ICON SÁNG TẠO: Mỗi thông số MỘT DÒNG. THAY THẾ HOÀN TOÀN các dấu gạch ngang (-) hoặc gạch đầu dòng thông thường bằng các ICON/EMOJI ĐA DẠNG SÁNG TẠO (Ví dụ: 🎯, 🚀, 💎, 🏡, 🛣️, 🎁, 🌟...). TUYỆT ĐỐI KHÔNG dùng ký tự sao (*, **) hay Markdown.
+8. CÚ PHÁP CHỐT HẠ (Luôn để ở cuối cùng):
 "☎️ Liên hệ: 0935.210.212 - Đăng Khoa
 💎 Đăng Khoa BĐS - Chuyên nghiệp, Tận tâm, Trách nhiệm!"
 
 ---
-TRẢ VỀ KẾT QUẢ THEO ĐÚNG CẤU TRÚC SAU ĐÂY (Phải có đủ các cụm từ in hoa):
+TRẢ VỀ KẾT QUẢ THEO ĐÚNG CẤU TRÚC SAU ĐÂY:
 
 THÔNG TIN NỘI BỘ:
-ĐC: [Địa chỉ đầy đủ]
+ĐC: [Địa chỉ đầy đủ thật]
 Diện Tích: [Ví dụ: 29m2]
 Số tầng: [Ví dụ: 2 tầng]
 Ngang: [Ví dụ: 3.3m]
@@ -644,16 +649,19 @@ HĐ: [Người giữ hợp đồng]
 SĐT: [Số điện thoại]
 Nguồn: [Tên Nguồn]
 
-TIÊU ĐỀ: [BẮT BUỘC: LẤY ĐỊA CHỈ ĐẦY ĐỦ BAO GỒM CẢ PHƯỜNG VÀ QUẬN TRONG DỮ LIỆU ĐỂ LÀM TIÊU ĐỀ. Ví dụ: "45.7 Bành Văn Trân, Phường 7, Tân Bình" hoặc "20.16 Nghĩa Hoà, Tân Bình"]
+TIÊU ĐỀ: [BẮT BUỘC: LẤY ĐỊA CHỈ ĐẦY ĐỦ CÓ PHƯỜNG VÀ QUẬN ĐỂ LÀM TIÊU ĐỀ]
 
 NỘI DUNG 1:
-[Bài đăng phong cách BÁN HÀNG CHUYÊN NGHIỆP, tập trung thông số và tiện ích, giấu số nhà. Nhớ xuống dòng và thêm icon cho từng thông số]
+[Bài đăng NGẮN GỌN (Phiên bản 1): Nhấn mạnh vào Vị trí, Quận giáp ranh & Giao thông liên kết. Dùng Icon đa dạng]
 
 NỘI DUNG 2:
-[Bài đăng phong cách KỂ CHUYỆN THỰC TẾ, NGẮN GỌN. Đi thẳng vào lý do bán chân thật, kèm thông số rõ ràng có icon]
+[Bài đăng NGẮN GỌN (Phiên bản 2): Nhấn mạnh vào Giá tốt & Khả năng đầu tư sinh lời. Dùng Icon đa dạng]
 
 NỘI DUNG 3:
-[Bài đăng phong cách NGẮN GỌN SÚC TÍCH, liệt kê rõ ràng bằng icon, tuyệt đối không dùng dấu sao, giấu số nhà]
+[Bài đăng NGẮN GỌN (Phiên bản 3): Nhấn mạnh vào Kết cấu nhà & Diện tích sử dụng thực tế. Dùng Icon đa dạng]
+
+NỘI DUNG 4:
+[Bài đăng SIÊU NGẮN GỌN (Phiên bản 4): Tốc độ, chỉ liệt kê các thông số giật gân nhất bằng Icon rực rỡ]
 
 Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
 
@@ -719,7 +727,7 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                         generatedText = generatedText.replace(/\*/g, '');
 
                         let aiTitle = '';
-                        let c1 = generatedText, c2 = '', c3 = '', internal = '';
+                        let c1 = generatedText, c2 = '', c3 = '', c4 = '', internal = '';
 
                         const internalMatch = generatedText.match(/THÔNG TIN NỘI BỘ:\s*([\s\S]*?)(?=TIÊU ĐỀ:)/i);
                         if (internalMatch) internal = internalMatch[1].trim();
@@ -727,11 +735,12 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                         const titleMatch = generatedText.match(/TIÊU ĐỀ:\s*([\s\S]*?)(?=NỘI DUNG 1:)/i);
                         const c1Match = generatedText.match(/NỘI DUNG 1:\s*([\s\S]*?)(?=NỘI DUNG 2:)/i);
                         const c2Match = generatedText.match(/NỘI DUNG 2:\s*([\s\S]*?)(?=NỘI DUNG 3:)/i);
-                        const c3Match = generatedText.match(/NỘI DUNG 3:\s*([\s\S]*)/i);
+                        const c3Match = generatedText.match(/NỘI DUNG 3:\s*([\s\S]*?)(?=NỘI DUNG 4:)/i);
+                        const c4Match = generatedText.match(/NỘI DUNG 4:\s*([\s\S]*)/i);
 
-                        if (c1Match && c2Match && c3Match) {
+                        if (c1Match && c2Match && c3Match && c4Match) {
                             if (titleMatch) aiTitle = titleMatch[1].trim();
-                            c1 = c1Match[1].trim(); c2 = c2Match[1].trim(); c3 = c3Match[1].trim();
+                            c1 = c1Match[1].trim(); c2 = c2Match[1].trim(); c3 = c3Match[1].trim(); c4 = c4Match[1].trim();
                         } else {
                             const lines = generatedText.split('\n').filter(line => line.trim() !== '');
                             if (lines.length > 1 && lines[0].length < 100) { aiTitle = lines[0].replace(/_|-|#|TIÊU ĐỀ:/gi, '').trim(); c1 = lines.slice(1).join('\n').replace(/NỘI DUNG 1:/gi, '').trim(); }
@@ -743,6 +752,7 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                             content1: c1,
                             content2: c2,
                             content3: c3,
+                            content4: c4,
                             content: c1,
                             title: aiTitle || prev.title || `Bài viết nháp - ${new Date().toLocaleTimeString('vi-VN')}`
                         }));
@@ -814,7 +824,7 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                     if (updatedPost.imageUrl && !updatedPost.imageUrls) { updatedPost.imageUrls = [updatedPost.imageUrl]; }
                     setFormData({
                         ...updatedPost, imageUrls: updatedPost.imageUrls || [], internalInfo: updatedPost.internalInfo || '',
-                        content1: updatedPost.content1 || updatedPost.content || '', content2: updatedPost.content2 || '', content3: updatedPost.content3 || '',
+                        content1: updatedPost.content1 || updatedPost.content || '', content2: updatedPost.content2 || '', content3: updatedPost.content3 || '', content4: updatedPost.content4 || '',
                         surveyImages: updatedPost.surveyImages || [], surveyNotes: updatedPost.surveyNotes || ''
                     });
                     setEditorTab(1); setCurrentView('editor');
@@ -1241,9 +1251,9 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                                                                 </div>
                                                             )}
 
-                                                            {(post.content1 || post.content2 || post.content3) && (
+                                                            {(post.content1 || post.content2 || post.content3 || post.content4) && (
                                                                 <div className="flex gap-1 mb-3 bg-gray-50 p-1 rounded-lg">
-                                                                    {[1,2,3].map(t => <button key={t} onClick={() => setActivePostTabs(prev => ({...prev, [post.id]: t}))} className={`flex-1 py-1 text-[10px] font-bold rounded-md ${currentTab === t ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500'}`}>{t===1?'Chuyên nghiệp':t===2?'Kể chuyện':'Ngắn gọn'}</button>)}
+                                                                    {[1,2,3,4].map(t => <button key={t} onClick={() => setActivePostTabs(prev => ({...prev, [post.id]: t}))} className={`flex-1 py-1 text-[10px] font-bold rounded-md ${currentTab === t ? 'bg-white text-indigo-700 shadow-sm' : 'text-gray-500'}`}>Bản {t}</button>)}
                                                                 </div>
                                                             )}
 
@@ -1323,30 +1333,30 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                                         {/* PHẢI */}
                                         <div className="flex flex-col gap-6">
                                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex flex-col flex-1">
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <label className="text-lg font-bold"><i className="fa-brands fa-facebook text-blue-600"></i> Đăng Facebook</label>
-                                                    <button onClick={() => copyTextOnly(formData[`content${editorTab}`] || formData.content, 'Đã copy!')} className="px-3 py-1.5 bg-indigo-50 text-indigo-700 font-bold rounded-lg text-sm"><i className="fa-solid fa-copy"></i> Copy</button>
+                                                <div className="flex justify-between items-center mb-4 border-b border-gray-100 pb-3 sm:pb-4">
+                                                    <label className="text-base sm:text-lg font-bold text-gray-800 flex items-center gap-2">
+                                                        <span className="bg-blue-100 text-blue-700 w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center text-xs sm:text-sm mr-1"><i className="fa-brands fa-facebook-f"></i></span>
+                                                        Nội dung đăng tải
+                                                    </label>
+                                                    <button
+                                                        onClick={() => copyToClipboard(formData[`content${editorTab}`] || formData.content)}
+                                                        className="text-xs sm:text-sm flex items-center gap-2 px-3 sm:px-4 py-1.5 sm:py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors"
+                                                    >
+                                                        <i className="fa-solid fa-copy"></i> Copy nhanh
+                                                    </button>
                                                 </div>
                                                 <div className="flex gap-2 mb-4 bg-gray-50 p-1.5 rounded-xl">
-                                                    {[1,2,3].map(t => <button key={t} onClick={() => setEditorTab(t)} className={`flex-1 py-2 text-sm font-bold rounded-lg ${editorTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>{t===1?'Chuyên nghiệp':t===2?'Kể chuyện':'Ngắn gọn'}</button>)}
+                                                    {[1,2,3,4].map(t => <button key={t} onClick={() => setEditorTab(t)} className={`flex-1 py-2 text-sm font-bold rounded-lg ${editorTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Bản {t}</button>)}
                                                 </div>
-                                                <textarea value={formData[`content${editorTab}`] || formData.content || ''} onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, [`content${editorTab}`]: val, ...(editorTab === 1 ? { content: val } : {}) })); }} className="w-full p-5 bg-gray-50 rounded-xl outline-none flex-1 min-h-[250px]"></textarea>
+                                                <textarea
+                                                    className="flex-1 w-full p-4 sm:p-5 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none text-base sm:text-lg leading-relaxed text-gray-900 outline-none transition-all min-h-[250px] sm:min-h-[350px]"
+                                                    placeholder="Bản nháp hoàn chỉnh sẽ xuất hiện ở đây..."
+                                                    value={formData[`content${editorTab}`] || formData.content || ''}
+                                                    onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, [`content${editorTab}`]: val, ...(editorTab === 1 ? { content: val } : {}) })); }}
+                                                ></textarea>
                                             </div>
 
-                                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                                <div className="flex justify-between items-center mb-4">
-                                                    <label className="text-lg font-bold">Ảnh Facebook (Public)</label>
-                                                    <div className="relative"><input type="file" multiple accept="image/*" id="multiImageInput" className="hidden" onChange={handleMultipleImageUpload} /><label htmlFor="multiImageInput" className="cursor-pointer bg-gray-100 px-4 py-2 rounded-xl font-bold text-sm"><i className="fa-solid fa-plus"></i> Thêm</label></div>
-                                                </div>
-                                                <div className="grid grid-cols-3 gap-3">
-                                                    {formData.imageUrls.map((url, index) => (
-                                                        <div key={index} className="relative rounded-xl overflow-hidden aspect-square group">
-                                                            <img src={url} className="w-full h-full object-cover" />
-                                                            <button onClick={(e) => { e.preventDefault(); openImageEditor(index); }} className="absolute top-2 right-10 bg-indigo-500 text-white w-7 h-7 rounded-lg"><i className="fa-solid fa-wand-magic-sparkles text-xs"></i></button>
-                                                            <button onClick={() => removeUploadedImage(index)} className="absolute top-2 right-2 bg-red-500 text-white w-7 h-7 rounded-lg"><i className="fa-solid fa-trash text-xs"></i></button>
-                                                        </div>
-                                                    ))}
-                                                </div>
+                                            <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100">
                                             </div>
                                         </div>
                                     </div>
