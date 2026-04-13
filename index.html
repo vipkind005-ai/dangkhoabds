@@ -1349,20 +1349,93 @@ Dữ liệu cung cấp từ Môi giới: \n${formData.rawText}`;
                                                     {[1,2,3,4].map(t => <button key={t} onClick={() => setEditorTab(t)} className={`flex-1 py-2 text-sm font-bold rounded-lg ${editorTab === t ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Bản {t}</button>)}
                                                 </div>
                                                 <textarea
-                                                    className="flex-1 w-full p-4 sm:p-5 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none text-base sm:text-lg leading-relaxed text-gray-900 outline-none transition-all min-h-[250px] sm:min-h-[350px]"
-                                                    placeholder="Bản nháp hoàn chỉnh sẽ xuất hiện ở đây..."
-                                                    value={formData[`content${editorTab}`] || formData.content || ''}
-                                                    onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, [`content${editorTab}`]: val, ...(editorTab === 1 ? { content: val } : {}) })); }}
-                                                ></textarea>
+                                                className="flex-1 w-full p-4 sm:p-5 border border-gray-200 rounded-xl bg-gray-50 focus:bg-white focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 resize-none text-base sm:text-lg leading-relaxed text-gray-900 outline-none transition-all min-h-[250px] sm:min-h-[350px]"
+                                                placeholder="Bản nháp hoàn chỉnh sẽ xuất hiện ở đây..."
+                                                value={formData[`content${editorTab}`] || formData.content || ''}
+                                                onChange={(e) => { const val = e.target.value; setFormData(prev => ({ ...prev, [`content${editorTab}`]: val, ...(editorTab === 1 ? { content: val } : {}) })); }}
+                                            ></textarea>
+                                        </div>
+
+                                        <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100">
+                                            <div className="flex justify-between items-center mb-4">
+                                                <div>
+                                                    <label className="block text-base sm:text-lg font-bold text-gray-800">
+                                                        Album ảnh
+                                                    </label>
+                                                    <span className="text-xs sm:text-sm font-medium text-gray-500">Tải lên nhiều ảnh đính kèm</span>
+                                                </div>
+
+                                                <div className="relative">
+                                                    <input
+                                                        type="file"
+                                                        multiple
+                                                        accept="image/*"
+                                                        id="multiImageInput"
+                                                        className="hidden"
+                                                        onChange={handleMultipleImageUpload}
+                                                    />
+                                                    <label htmlFor="multiImageInput" className="cursor-pointer bg-gray-100 hover:bg-gray-200 text-gray-800 px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl flex items-center gap-2 font-bold text-xs sm:text-sm transition-colors">
+                                                        <i className="fa-solid fa-plus"></i> Thêm ảnh
+                                                    </label>
+                                                </div>
                                             </div>
 
-                                            <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-gray-100">
-                                            </div>
+                                            {(!formData.imageUrls || formData.imageUrls.length === 0) ? (
+                                                <div className="border-2 border-dashed border-gray-300 rounded-2xl p-6 sm:p-10 flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 transition-colors cursor-pointer relative">
+                                                    <input
+                                                        type="file"
+                                                        multiple
+                                                        accept="image/*"
+                                                        onChange={handleMultipleImageUpload}
+                                                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                    />
+                                                    <i className="fa-regular fa-images text-3xl sm:text-4xl text-gray-400 mb-2 sm:mb-3"></i>
+                                                    <p className="text-sm sm:text-base font-bold text-gray-600">Nhấn để chọn ảnh</p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
+                                                    {formData.imageUrls.map((url, index) => (
+                                                        <div key={index} className="relative rounded-xl overflow-hidden border border-gray-200 aspect-square group shadow-sm">
+                                                            <img src={url} alt={`Upload ${index}`} className="w-full h-full object-cover" />
+
+                                                            {index === 0 && (
+                                                                <span className="absolute bottom-2 left-2 bg-indigo-600 text-white text-[10px] sm:text-xs font-bold px-1.5 sm:px-2 py-1 rounded-md shadow">
+                                                                    Ảnh bìa
+                                                                </span>
+                                                            )}
+
+                                                            <button onClick={(e) => { e.preventDefault(); openImageEditor(index); }} className="absolute top-2 right-10 bg-indigo-500 hover:bg-indigo-600 text-white w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg shadow-lg">
+                                                                <i className="fa-solid fa-wand-magic-sparkles text-xs sm:text-sm"></i>
+                                                            </button>
+
+                                                            <button
+                                                                onClick={() => removeUploadedImage(index)}
+                                                                className="absolute top-2 right-2 bg-red-500 hover:bg-red-600 text-white w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg shadow-lg"
+                                                            >
+                                                                <i className="fa-solid fa-trash text-xs sm:text-sm"></i>
+                                                            </button>
+                                                        </div>
+                                                    ))}
+
+                                                    <div className="relative rounded-xl border-2 border-dashed border-gray-300 aspect-square flex flex-col items-center justify-center bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors">
+                                                        <input
+                                                            type="file"
+                                                            multiple
+                                                            accept="image/*"
+                                                            onChange={handleMultipleImageUpload}
+                                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                                                        />
+                                                        <i className="fa-solid fa-plus text-xl sm:text-2xl text-gray-400 mb-1"></i>
+                                                        <span className="text-xs sm:text-sm font-bold text-gray-500">Thêm</span>
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
-                            )}
-                        </main>
+                            </div>
+                        )}
+                    </main>
                     </div>
                 );
             }
